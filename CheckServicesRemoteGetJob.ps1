@@ -1,28 +1,35 @@
-### 2019.08.11 Drumsand | KRPL@dgs.com
-### v 1.03 tested
-### Check services status with remote jobs on remote VM's
-###
-### v 1.03 | 2020.04.16 |
-### - $StatusColor now uses CSS classes
-### - PSSession -IncludePortInSPN loop waiting to be made
-###
-### v 1.02 | 2019.12.02 |
-### - IE css to present table nested
-### - column names expressions
-### - additional CSS to highlight status of a service in logfile
-### - CSS 3 blink feature used for services in starting status
-### - servers not checked comparison in (HTML) log only now
-###
-### v 1.01 | 2019.08.11 |
-### - servers not checked comparison on screen and log (HTML)
-### - prepared future menu for environments to be checked
-###
-### How to use:
-### $Path > $DNSList (check and adjust folder location for your needs)
-###    put *.txt file with list of servers. Each server name in separate line. No delimiters.
-###    $EnvName is your filename without extension
-### Services are check by matching Name and DisplayName at $Jobs
-### To work paths "$Path" and "${Path}\_LOG" needs to be created!
+<#
+.SYNOPSIS
+List filtered services status and other details from remote VM's to HTML file
+
+.DESCRIPTION
+List filtered services status and other details from remote VM's to HTML file
+How to use:
+$Path > $DNSList (check and adjust folder location for your needs)
+   put *.txt file with list of servers. Each server name in separate line. No delimiters.
+   $EnvName is your filename without extension
+Services are check by matching Name and DisplayName at $Jobs
+To work paths "$Path" and "${Path}\_LOG" needs to be created!
+
+.NOTES
+v 1.03 | 2020.04.16 |
+- $StatusColor now uses CSS classes
+- PSSession -IncludePortInSPN loop waiting to be made
+
+v 1.02 | 2019.12.02 |
+- IE css to present table nested
+- column names expressions
+- additional CSS to highlight status of a service in logfile
+- CSS 3 blink feature used for services in starting status
+- servers not checked comparison in (HTML) log only now
+
+v 1.01 | 2019.08.11 |
+- servers not checked comparison on screen and log (HTML)
+- prepared future menu for environments to be checked
+
+.LINK
+https://raw.githubusercontent.com/Drumsand/Drumsand/master/CheckServicesRemoteGetJob.ps1
+#>
 
 
 Clear-Host

@@ -1,0 +1,244 @@
+### 2019.08.11 Drumsand | KRPL@dgs.com
+### v 1.03 tested
+### Check services status with remote jobs on remote VM's
+###
+### v 1.03 | 2020.04.16 |
+### - $StatusColor now uses CSS classes
+### - PSSession -IncludePortInSPN loop waiting to be made
+###
+### v 1.02 | 2019.12.02 |
+### - IE css to present table nested
+### - column names expressions
+### - additional CSS to highlight status of a service in logfile
+### - CSS 3 blink feature used for services in starting status
+### - servers not checked comparison in (HTML) log only now
+###
+### v 1.01 | 2019.08.11 |
+### - servers not checked comparison on screen and log (HTML)
+### - prepared future menu for environments to be checked
+###
+### How to use:
+### $Path > $DNSList (check and adjust folder location for your needs)
+###    put *.txt file with list of servers. Each server name in separate line. No delimiters.
+###    $EnvName is your filename without extension
+### Services are check by matching Name and DisplayName at $Jobs
+### To work paths "$Path" and "${Path}\_LOG" needs to be created!
+
+
+Clear-Host
+
+#get date for logfile unique filename
+$CurrentDateLog = Get-Date -format "yyyy-dd-MM_HH-mm-ss"
+$CurrentDateText = Get-Date -format "yyyy-dd-MM HH:mm"
+
+$ErrorActionPreference = "SilentlyContinue"
+
+# get path
+$Path = '\\KBNDBMGT02\PS_Script'
+
+# Environment name
+$EnvName = "Ping_Pong_Atlas_EMEA" #Read-Host -Prompt "Provide parameter file name without .extension"
+
+# variable for logfile path(CSV UTF8)
+$ReportDataFile = "${Path}\_LOG\status_service_data_${CurrentDateLog}.log"
+$ReportErrorFile = "${Path}\_LOG\status_service_error_${CurrentDateLog}.log"
+$ReportKerberosFile = "${Path}\_LOG\status_service_kerberos_${CurrentDateLog}.log"
+# variable for logfile path(HTML text UTF8)
+$ReportHTMLFile = "${Path}\_LOG\status_service_html_${CurrentDateLog}.html"
+#variable for Select-Object
+$SelectColumns = 'PSComputerName, Name, StartName, StartMode, State'
+# variable for logo file
+$Logo = '<img style=vertical-align:middle; src="\\KBNDBMGT02\PS_Script\CheckServicesRemoteGetJob\Demant_Logo.png" alt="Demant_logo">'
+
+
+# CSS style for logfile (HTML UTF8)
+$css = @"
+<style>
+h1      { text-align: left; font-size: 12px; text-align: left; font-family: Segoe UI; display: table-cell; vertical-align: middle; }
+h5, th  { text-align: left; font-size: 11px; text-align: left; font-family: Segoe UI; }
+table   { table-layout: fixed; width: 98%; margin: auto; font-family: Segoe UI; box-shadow: 10px 10px 5px #888; border: thin ridge grey; }
+th      { text-align: left; font-size: 11px; background: #2E2A3F; color: #B8BCD8; max-width: 400px; padding: 3px 10px; position: sticky; top: 0px; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); }
+td      { text-align: left; font-size: 11px; padding: 3px 20px; color: 1E1423; }
+tr      { background: 3C4A70; }
+tr:nth-child(even)  { background: #AAD3E0; }
+tr:nth-child(odd)   { background: D0EDF3; }
+
+.Continue-Pending   { color:#92977E; background: #FE2020 }
+.Paused             { color:#2A9D8F; background: #FE2020 }
+.Pause-Pending      { color:#E9C46A; background: #FE2020 }
+.Running            { color:#FFFFFF; background: #06EB76 }
+.Stopped            { color:#CAFAFE; background: #FE2020 }
+.Stop-Pending       { color:#907163; background: #FE2020 }
+.Disabled           { color:#FE2020; background: #FFE400 }
+.Manual             { color:#66FCF1; background: #272727 }
+
+.blink-bg{
+		color:#3FEEE6;
+		background: #FE2020;
+		width: 100%;
+		display: table-cell;
+		animation: blinkingBackground 2s infinite;
+	}
+	@keyframes blinkingBackground{
+		0%		{ background-color: #10C018;}
+		25%		{ background-color: #1056C0;}
+		50%		{ background-color: #EF0A1A;}
+		75%		{ background-color: #254878;}
+		100%	{ background-color: #04A1D5;}
+	}
+</style>
+"@
+
+
+# Additional CSS to highlight status of a service in logfile
+$StatusColor = @{ `
+    'Continue Pending'     = ' class="Continue-Pending">Continue Pending<'; # The service has been paused and is about to continue.
+    Paused                 = ' class="Paused">Paused<';                     # The service is paused.
+    'Pause Pending'        = ' class="Pause-Pending ">Pause Pending<';      # The service is in the process of pausing.
+    Running                = ' class="Running">Running<';                   # The service is running.
+    'Start Pending'        = ' class="blink-bg">Starting<';                 # The service is in the process of starting.
+    Stopped                = ' class="Stopped">Stopped<';                   # The service is not running.
+    'Stop Pending'         = ' class="Stopping">Stopping<';                 # The service is in the process of stopping.
+    Disabled               = ' class="Disabled">Disabled<';                 # The startup mode is set to DISABLED
+    Manual                 = ' class="Manual">Manual<';                     # The startup mode is set to MANUAL
+}
+
+# server list to check from file (CSV)
+# $DNSList = @(Get-Content ${Path}\Ping_Pong\Ping_Pong_ATLAS_EMEA_TEST.csv)
+$DNSList = @(Get-Content "${Path}\Ping_Pong\$($EnvName).txt") # @( "KBNDVAXO40", "KBNDVAXO41", "KBNDVAXO42" ) #
+
+$s = New-PSSession -ComputerName $DNSList -Name Marty-CheckService
+$s
+
+$Jobs = Invoke-Command -Session $s {
+    Get-CimInstance -class win32_service |
+        Where-Object { ( `
+                    $_.Name -match "AOS60" `
+                -or $_.Name -match "ATLAS_"                     <# POS Services #> `
+                -or $_.Name -match "MSSQL" `
+                -or $_.Name -match "SQLAgent" -or $_.Name -match "SQLSERVERAGENT" `
+                -or $_.Name -match "ReportServer" `
+                -or $_.Name -match "Lasernet" `
+                -or $_.Name -match "IISADMIN"                   <# IIS #> `
+                -or $_.Name -match "W3SVC"                      <# IIS / World Wide Web Publishing Service #> `
+                -or $_.Name -match "WMSVC"                      <# Web Management Service #> `
+                -or $_.Name -match "CRM" `
+                -or $_.Name -match "MSCRM" `
+                -or $_.DisplayName -match "Dynamics 365" `
+                -or $_.DisplayName -match "Mongo"  `
+                -and !($_.Name -match "MSSQLFDLauncher") `       <# non-essential SQL #>
+                # -or $_.DisplayName -eq "Dynamics 365 VSS Writer" `
+                # -or $_.Name -match "RSoPProv" `                <# The one with manual startup (test) #> `
+                # -or $_.Name -match "tzautoupdate" `            <# The one with disabled startup (test) #> `
+        ) }
+} -AsJob -JobName Marty!
+
+# # Get all the running jobs
+# $jobs = get-job | ? { $_.state -eq "running" }
+# $total = $jobs.count
+# $runningjobs = $jobs.count
+
+
+# Jobs progress simple no info
+Write-Host " `nJobs running " -ForegroundColor DarkCyan
+while (($Jobs.State -eq "Running") -and ($Jobs.State -ne "NotStarted")) {
+    Write-Host '.' -NoNewline -ForegroundColor DarkCyan
+    Start-Sleep -Seconds 1
+
+}
+
+# New line for nice output
+Write-Host "`n`t"
+
+# receive job to list services status | sort | export logfile (CSV UTF8)
+Get-Job | Wait-Job | Receive-Job -ErrorAction SilentlyContinue |
+    Sort-Object PSComputerName, Service |
+    Export-Csv -Path $ReportDataFile -NoTypeInformation -Encoding UTF8 -Delimiter ";"
+
+
+# Kill opened PS Sessions
+Write-Host "Removing Powershell sessions from remote computers"
+Remove-PSSession $s # -Verbose
+# $s | % { Remove-PSSession -Session $s } -Verbose
+
+# Create logfile (HTML UTF8)
+# ---
+
+
+# Values for log. Services
+$GService = Import-Csv $ReportDataFile -Delimiter ";" |
+    Select-Object `
+        @{Name = "Server Name"; Expression = { $_.PSComputerName } },
+        @{Name = "Service"; Expression = { $_.Name } },
+        @{Name = "Logon Account"; Expression = { $_.StartName } },
+        @{Name = "Service Start Mode"; Expression = { $_.StartMode } },
+        @{Name = "Service Status"; Expression = { $_.State } } |
+    ConvertTo-HTML -AS Table -Fragment -PreContent '<table><colgroup><col/></colgroup><tr><th><h1>Services on Servers</h1></th></tr>' | Out-String
+
+# Logfile (HTML UTF8) status color
+$StatusColor.Keys | ForEach-Object { $GService = $GService -replace ">$_<", ($StatusColor.$_) }
+
+
+# compare lists to know servers not checked
+$Check1 = $DNSList | Sort-Object -Unique
+$Check2 = (Import-Csv $ReportDataFile -Delimiter ";").PSComputerName | Sort-Object -Unique
+(Compare-Object $Check1 $Check2).InputObject | Out-String | Out-File $ReportErrorFile
+
+
+# convert Array to CSV
+(Get-Content $ReportErrorFile) | % { '"' + $_ + '";' } | Set-Content $ReportErrorFile
+@('Kerberos_hardened;') + (Get-Content $ReportErrorFile) | Set-Content $ReportErrorFile
+
+
+
+# In future
+# $DNS_SPN = @(Get-Content $ReportErrorFile.kerberos_hardened)
+# $sb = New-PSSession -ComputerName $DNS_SPN -IncludePortInSPN -Name Marty-CheckSrvKerberos
+# $sb
+
+
+$GError = Import-Csv $ReportErrorFile -Delimiter ";" | ConvertTo-Html -AS Table -Fragment -PreContent '<table><colgroup><col/></colgroup><tr><th><h1>Servers not checked </h1></th></tr>' | Out-String
+
+
+#
+# Save log file HTML
+#
+ConvertTo-HTML -head $css -Property PSComputerName, Name, StartType, Status -PostContent $GService, $GError `
+    -PreContent `
+    "
+<!--[if IE]><style>
+td { border-color: black; border-style: solid; border-width: 1px 1px 0px 0; }
+</style><![endif]-->
+
+<table><colgroup><col/></colgroup><tr><th><h1> $($Logo) Report: Status on machines. Generated on $($CurrentDateText)</h1></th></tr>" | Out-File $ReportHTMLFile
+
+
+# put on-screen
+# $onscreen = Import-Csv $ReportDataFile -Delimiter ";"
+# $onscreen | Format-Table -AutoSize -Wrap
+
+$onscreen = Import-Csv $ReportErrorFile -Delimiter ";"
+$onscreen | Format-Table -AutoSize -Wrap
+
+
+# write confirmation that logfile (HTML UTF8) has been created with list of servers checked
+# Clear-Host
+Write-Host ' Jobs Finished ' -BackgroundColor DarkCyan -ForegroundColor White
+Write-Host " "
+Write-Host " Log file path stored in clipboard automatically " -BackgroundColor DarkCyan -ForegroundColor White
+Write-Host " $($ReportHTMLFile) " -BackgroundColor DarkCyan -ForegroundColor White
+
+# servers NOT checked
+#Write-Host " "
+#Write-Host " Servers NOT checked " -BackgroundColor Red -ForegroundColor Black
+#Write-Host "$($ListCompare)" -BackgroundColor Black -ForegroundColor Red
+
+# Replace column names in HTML
+#(Get-Content $ReportHTMLFile).replace("PSComputerName", "Server Name").Replace("Name", "Service Name") | `
+#Set-Content $ReportHTMLFile
+
+# open logfile (HTML UTF8) and temporary file cleanup
+$ReportHTMLFile | clip
+Invoke-Item $ReportHTMLFile
+# Remove-Item $ReportDataFile
+# Remove-Item $ReportErrorFile

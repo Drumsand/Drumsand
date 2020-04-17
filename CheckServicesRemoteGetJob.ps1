@@ -8,7 +8,7 @@ How to use:
 $Path > $DNSList (check and adjust folder location for your needs)
    put *.txt file with list of servers. Each server name in separate line. No delimiters.
    $EnvName is your filename without extension
-Services are check by matching Name and DisplayName at $Jobs
+Services are matched by Name and DisplayName at $Jobs
 To work paths "$Path" and "${Path}\_LOG" needs to be created!
 
 .NOTES
@@ -31,17 +31,16 @@ v 1.01 | 2019.08.11 |
 https://raw.githubusercontent.com/Drumsand/Drumsand/master/CheckServicesRemoteGetJob.ps1
 #>
 
-
 Clear-Host
 
 #get date for logfile unique filename
-$CurrentDateLog = Get-Date -format "yyyy-dd-MM_HH-mm-ss"
-$CurrentDateText = Get-Date -format "yyyy-dd-MM HH:mm"
+$CurrentDateLog = Get-Date -format "yyyy-MM-dd_HH-mm-ss"
+$CurrentDateText = Get-Date -format "yyyy-MM-dd HH:mm"
 
 $ErrorActionPreference = "SilentlyContinue"
 
 # get path
-$Path = '\\KBNDBMGT02\PS_Script'
+$Path = '\\servername\PS_Script'
 
 # Environment name
 $EnvName = "Ping_Pong_Atlas_EMEA" #Read-Host -Prompt "Provide parameter file name without .extension"
@@ -49,7 +48,7 @@ $EnvName = "Ping_Pong_Atlas_EMEA" #Read-Host -Prompt "Provide parameter file nam
 # variable for logfile path(CSV UTF8)
 $ReportDataFile = "${Path}\_LOG\status_service_data_${CurrentDateLog}.log"
 $ReportErrorFile = "${Path}\_LOG\status_service_error_${CurrentDateLog}.log"
-$ReportKerberosFile = "${Path}\_LOG\status_service_kerberos_${CurrentDateLog}.log"
+$ReportKerberosFile = "${Path}\_LOG\status_service_kerberos_${CurrentDateLog}.log" # Someday a loop maybe
 # variable for logfile path(HTML text UTF8)
 $ReportHTMLFile = "${Path}\_LOG\status_service_html_${CurrentDateLog}.html"
 #variable for Select-Object
@@ -61,23 +60,24 @@ $Logo = '<img style=vertical-align:middle; src="\\KBNDBMGT02\PS_Script\CheckServ
 # CSS style for logfile (HTML UTF8)
 $css = @"
 <style>
+body 	{ background: #000; color: #E3E3E3; }
+table   { table-layout: fixed; width: 98%; margin: auto; font-family: Segoe UI; box-shadow: 10px 10px 5px #D3D3D3; border: thin ridge grey; color: #DDD; }
 h1      { text-align: left; font-size: 12px; text-align: left; font-family: Segoe UI; display: table-cell; vertical-align: middle; }
-h5, th  { text-align: left; font-size: 11px; text-align: left; font-family: Segoe UI; }
-table   { table-layout: fixed; width: 98%; margin: auto; font-family: Segoe UI; box-shadow: 10px 10px 5px #888; border: thin ridge grey; }
-th      { text-align: left; font-size: 11px; background: #2E2A3F; color: #B8BCD8; max-width: 400px; padding: 3px 10px; position: sticky; top: 0px; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); }
-td      { text-align: left; font-size: 11px; padding: 3px 20px; color: 1E1423; }
-tr      { background: 3C4A70; }
-tr:nth-child(even)  { background: #AAD3E0; }
-tr:nth-child(odd)   { background: D0EDF3; }
+h5		{ text-align: left; font-size: 12px; text-align: left; font-family: Segoe UI;}
+th      { text-align: left; font-size: 12px; text-align: left; font-family: Segoe UI; background: #333333; color: #E6E8E9; max-width: 400px; padding: 3px 10px; position: sticky; top: 0px; }
+td      { text-align: left; font-size: 12px; padding: 3px 20px; color: 476070; }
+tr      { background: #2E5266; color: #E3E3E3; }
+tr:nth-child(even)  { background: #2E5266; color: #B3B3B3; }
+tr:nth-child(odd)   { background: #6E8898; color: #E3E3E3; }
 
-.Continue-Pending   { color:#92977E; background: #FE2020 }
-.Paused             { color:#2A9D8F; background: #FE2020 }
-.Pause-Pending      { color:#E9C46A; background: #FE2020 }
-.Running            { color:#FFFFFF; background: #06EB76 }
-.Stopped            { color:#CAFAFE; background: #FE2020 }
-.Stop-Pending       { color:#907163; background: #FE2020 }
-.Disabled           { color:#FE2020; background: #FFE400 }
-.Manual             { color:#66FCF1; background: #272727 }
+.Continue-Pending   { background: #FE2020; color: #92977E; }
+.Paused             { background: #FE2020; color: #2A9D8F; }
+.Pause-Pending      { background: #FE2020; color: #E9C46A; }
+.Running            { background: #06EB76; color: #FFFFFF; }
+.Stopped            { background: #FE2020; color: #CAFAFE; }
+.Stop-Pending       { background: #FE2020; color: #907163; }
+.Disabled           { background: #FFE400; color: #FE2020; }
+.Manual             { background: #272727; color: #66FCF1; }
 
 .blink-bg{
 		color:#3FEEE6;
@@ -87,15 +87,24 @@ tr:nth-child(odd)   { background: D0EDF3; }
 		animation: blinkingBackground 2s infinite;
 	}
 	@keyframes blinkingBackground{
-		0%		{ background-color: #10C018;}
-		25%		{ background-color: #1056C0;}
-		50%		{ background-color: #EF0A1A;}
-		75%		{ background-color: #254878;}
-		100%	{ background-color: #04A1D5;}
+		0%		{ background: #10C018;}
+		25%		{ background: #1056C0;}
+		50%		{ background: #EF0A1A;}
+		75%		{ background: #254878;}
+		100%	{ background: #04A1D5;}
 	}
 </style>
 "@
 
+# CSS light theme
+# .Continue-Pending   { color:#92977E; background: #FE2020 }
+# .Paused             { color:#2A9D8F; background: #FE2020 }
+# .Pause-Pending      { color:#E9C46A; background: #FE2020 }
+# .Running            { color:#FFFFFF; background: #06EB76 }
+# .Stopped            { color:#CAFAFE; background: #FE2020 }
+# .Stop-Pending       { color:#907163; background: #FE2020 }
+# .Disabled           { color:#FE2020; background: #FFE400 }
+# .Manual             { color:#66FCF1; background: #272727 }
 
 # Additional CSS to highlight status of a service in logfile
 $StatusColor = @{ `
@@ -111,8 +120,10 @@ $StatusColor = @{ `
 }
 
 # server list to check from file (CSV)
-# $DNSList = @(Get-Content ${Path}\Ping_Pong\Ping_Pong_ATLAS_EMEA_TEST.csv)
-$DNSList = @(Get-Content "${Path}\Ping_Pong\$($EnvName).txt") # @( "KBNDVAXO40", "KBNDVAXO41", "KBNDVAXO42" ) #
+#
+# $DNSList = @(Get-Content ${Path}\Ping_Pong\Ping_Pong_EMEA_TEST.csv)
+$DNSList = @(Get-Content "${Path}\Ping_Pong\$($EnvName).txt")
+# $DNSList = @( "servername" )
 
 $s = New-PSSession -ComputerName $DNSList -Name Marty-CheckService
 $s
@@ -131,6 +142,7 @@ $Jobs = Invoke-Command -Session $s {
                 -or $_.Name -match "WMSVC"                      <# Web Management Service #> `
                 -or $_.Name -match "CRM" `
                 -or $_.Name -match "MSCRM" `
+                -or ( $_.Name -match "spool" -and $_.PSComputerName -match "OMS" ) `
                 -or $_.DisplayName -match "Dynamics 365" `
                 -or $_.DisplayName -match "Mongo"  `
                 -and !($_.Name -match "MSSQLFDLauncher") `       <# non-essential SQL #>

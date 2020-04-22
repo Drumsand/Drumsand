@@ -25,7 +25,7 @@ v 1.02 | 2019.12.02 |
 
 v 1.01 | 2019.08.11 |
 - servers not checked comparison on screen and log (HTML)
-- prepared future menu for environments to be checked
+- prepared future menu for environments to be checked (now removed)
 
 .LINK
 https://raw.githubusercontent.com/Drumsand/Drumsand/master/CheckServicesRemoteGetJob.ps1

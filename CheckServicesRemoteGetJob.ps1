@@ -15,6 +15,7 @@ To work paths "$Path" and "${Path}\_LOG" needs to be created!
 v 1.03 | 2020.04.16 |
 - $StatusColor now uses CSS classes
 - PSSession -IncludePortInSPN loop waiting to be made
+- ` (ticks) removed (when possible more to follow)
 
 v 1.02 | 2019.12.02 |
 - IE css to present table nested
@@ -129,27 +130,32 @@ $s = New-PSSession -ComputerName $DNSList -Name Marty-CheckService
 $s
 
 $Jobs = Invoke-Command -Session $s {
+    $os = Get-WmiObject win32_operatingsystem
+    $UpTime = (Get-Date) - ($os.ConvertToDateTime($os.lastbootuptime))
+    $wmiOSUpTime = "Uptime: " + $Uptime.Days + "d " + $Uptime.Hours + "h " + $Uptime.Minutes + "min "
+
     Get-CimInstance -class win32_service |
-        Where-Object { ( `
-                    $_.Name -match "AOS60" `
-                -or $_.Name -match "ATLAS_"                     <# POS Services #> `
-                -or $_.Name -match "MSSQL" `
-                -or $_.Name -match "SQLAgent" -or $_.Name -match "SQLSERVERAGENT" `
-                -or $_.Name -match "ReportServer" `
-                -or $_.Name -match "Lasernet" `
-                -or $_.Name -match "IISADMIN"                   <# IIS #> `
-                -or $_.Name -match "W3SVC"                      <# IIS / World Wide Web Publishing Service #> `
-                -or $_.Name -match "WMSVC"                      <# Web Management Service #> `
-                -or $_.Name -match "CRM" `
-                -or $_.Name -match "MSCRM" `
-                -or ( $_.Name -match "spool" -and $_.PSComputerName -match "OMS" ) `
-                -or $_.DisplayName -match "Dynamics 365" `
-                -or $_.DisplayName -match "Mongo"  `
-                -and !($_.Name -match "MSSQLFDLauncher") `       <# non-essential SQL #>
-                # -or $_.DisplayName -eq "Dynamics 365 VSS Writer" `
-                # -or $_.Name -match "RSoPProv" `                <# The one with manual startup (test) #> `
-                # -or $_.Name -match "tzautoupdate" `            <# The one with disabled startup (test) #> `
-        ) }
+        Where-Object { (
+                $_.Name -match "AOS60"                  -or
+                $_.Name -match "ATLAS_"                 -or         <# POS Services #>
+                $_.Name -match "MSSQL"                  -or
+                $_.Name -match "SQLAgent"               -or
+                $_.Name -match "SQLSERVERAGENT"         -or
+                $_.Name -match "ReportServer"           -or
+                $_.Name -match "Lasernet"               -or
+                $_.Name -match "IISADMIN"               -or         <# IIS #>
+                $_.Name -match "W3SVC"                  -or         <# IIS / World Wide Web Publishing Service #>
+                $_.Name -match "WMSVC"                  -or         <# Web Management Service #>
+                $_.Name -match "CRM"                    -or
+                $_.Name -match "MSCRM"                  -or
+                ( $_.Name -match "spool" | Where-Object { ( $_.PSComputerName -like "*OMS*" ) } )  -or
+                $_.DisplayName -match "Dynamics 365"    -or
+                $_.DisplayName -match "Mongo"           -and
+                !($_.Name -match "MSSQLFDLauncher")                 <# non-essential SQL #>
+                # $_.Name -match "RSoPProv" `             -or         <# The one with manual startup (test) #>
+                # $_.Name -match "tzautoupdate" `         -or         <# The one with disabled startup (test) #>
+            ) } |
+        Select-Object -Property *, @{Name = 'Server UpTime'; Expression = { $wmiOSUpTime } }
 } -AsJob -JobName Marty!
 
 # # Get all the running jobs

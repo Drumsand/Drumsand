@@ -12,21 +12,26 @@ Services are matched by Name and DisplayName at $Jobs
 To work paths "$Path" and "${Path}\_LOG" needs to be created!
 
 .NOTES
+v 1.04 | 2020.04.22 |
+- Server Uptime added to HTML report
+- CSS classes related to column dimensions added
+- ` (ticks) removed (when possible more to follow)
+
 v 1.03 | 2020.04.16 |
 - $StatusColor now uses CSS classes
 - PSSession -IncludePortInSPN loop waiting to be made
-- ` (ticks) removed (when possible more to follow)
 
 v 1.02 | 2019.12.02 |
 - IE css to present table nested
 - column names expressions
 - additional CSS to highlight status of a service in logfile
+    https://jamesdatatechq.wordpress.com/2014/12/23/how-to-create-an-html-table-from-powershell/
 - CSS 3 blink feature used for services in starting status
 - servers not checked comparison in (HTML) log only now
 
 v 1.01 | 2019.08.11 |
 - servers not checked comparison on screen and log (HTML)
-- prepared future menu for environments to be checked (now removed)
+- prepared future menu for environments to be checked
 
 .LINK
 https://raw.githubusercontent.com/Drumsand/Drumsand/master/CheckServicesRemoteGetJob.ps1
@@ -228,14 +233,14 @@ $GError = Import-Csv $ReportErrorFile -Delimiter ";" | ConvertTo-Html -AS Table 
 #
 # Save log file HTML
 #
-ConvertTo-HTML -head $css -Property PSComputerName, Name, StartType, Status -PostContent $GService, $GError `
-    -PreContent `
-    "
-<!--[if IE]><style>
-td { border-color: black; border-style: solid; border-width: 1px 1px 0px 0; }
-</style><![endif]-->
+ConvertTo-HTML -Title $Title -head $css -PostContent $GService, $GError -PreContent "
+    <!--[if IE]><style>
+    td { border-color: black; border-style: solid; border-width: 1px 1px 0px 0; }
+    </style><![endif]-->
 
-<table><colgroup><col/></colgroup><tr><th><h1> $($Logo) Report: Status on machines. Generated on $($CurrentDateText)</h1></th></tr>" | Out-File $ReportHTMLFile
+    <table><colgroup><col/></colgroup><tr><th><h1> $($Logo) $($Title)</h1></th></tr>
+    " |
+    Out-File $ReportHTMLFile
 
 
 # put on-screen

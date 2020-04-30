@@ -127,12 +127,11 @@ $StatusColor = @{ `
 
 # server list to check from file (CSV)
 #
-# $DNSList = @(Get-Content ${Path}\Ping_Pong\Ping_Pong_EMEA_TEST.csv)
+# $DNSList = @(Get-Content ${Path}\Ping_Pong\Ping_Pong_ENV_TEST.csv)
 $DNSList = @(Get-Content "${Path}\Ping_Pong\$($EnvName).txt")
 # $DNSList = @( "servername" )
 
 $s = New-PSSession -ComputerName $DNSList -Name Marty-CheckService
-$s
 
 $Jobs = Invoke-Command -Session $s {
     $os = Get-WmiObject win32_operatingsystem

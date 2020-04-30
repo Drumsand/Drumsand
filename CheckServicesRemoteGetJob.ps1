@@ -49,7 +49,7 @@ $ErrorActionPreference = "SilentlyContinue"
 $Path = '\\servername\PS_Script'
 
 # Environment name
-$EnvName = "Ping_Pong_Atlas_EMEA" #Read-Host -Prompt "Provide parameter file name without .extension"
+$EnvName = "Ping_Pong_ENV_Region" #Read-Host -Prompt "Provide parameter file name without .extension"
 
 # variable for logfile path(CSV UTF8)
 $ReportDataFile = "${Path}\_LOG\status_service_data_${CurrentDateLog}.log"
@@ -60,7 +60,7 @@ $ReportHTMLFile = "${Path}\_LOG\status_service_html_${CurrentDateLog}.html"
 #variable for Select-Object
 $SelectColumns = 'PSComputerName, Name, StartName, StartMode, State'
 # variable for logo file
-$Logo = '<img style=vertical-align:middle; src="\\KBNDBMGT02\PS_Script\CheckServicesRemoteGetJob\Demant_Logo.png" alt="Demant_logo">'
+$Logo = '<img style=vertical-align:middle; src="\\Server_Name\PS_Script\CheckServicesRemoteGetJob\Demant_Logo.png" alt="Demant_logo">'
 
 
 # CSS style for logfile (HTML UTF8)

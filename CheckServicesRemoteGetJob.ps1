@@ -12,6 +12,10 @@ Services are matched by Name and DisplayName at $Jobs
 To work paths "$Path" and "${Path}\_LOG" needs to be created!
 
 .NOTES
+
+v 1.05 | 2020.06.10 |
+- CIM CmdLets only now
+
 v 1.04 | 2020.04.22 |
 - Server Uptime added to HTML report
 - CSS classes related to column dimensions added
@@ -134,9 +138,10 @@ $DNSList = @(Get-Content "${Path}\Ping_Pong\$($EnvName).txt")
 $s = New-PSSession -ComputerName $DNSList -Name Marty-CheckService
 
 $Jobs = Invoke-Command -Session $s {
-    $os = Get-WmiObject win32_operatingsystem
-    $UpTime = (Get-Date) - ($os.ConvertToDateTime($os.lastbootuptime))
-    $wmiOSUpTime = "Uptime: " + $Uptime.Days + "d " + $Uptime.Hours + "h " + $Uptime.Minutes + "min "
+    $Boot = (Get-CimInstance -ClassName win32_operatingsystem | Select-Object LastBootUpTime).lastbootuptime
+    $Today = Get-Date
+    $UpTime = New-TimeSpan -start $Boot -end $Today
+    $CimOSUpTime = "Uptime: " + $UpTime.Days + "d " + $UpTime.Hours + "h "
 
     Get-CimInstance -class win32_service |
         Where-Object { (

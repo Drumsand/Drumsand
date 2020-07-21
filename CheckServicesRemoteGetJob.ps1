@@ -80,6 +80,12 @@ tr      { background: #2E5266; color: #E3E3E3; }
 tr:nth-child(even)  { background: #2E5266; color: #B3B3B3; }
 tr:nth-child(odd)   { background: #6E8898; color: #E3E3E3; }
 
+.col-sn-width       { width: 120px; }       /* ServerName column width */
+.col-ut-width       { width: 100px; }       /* UpTime column width */
+.col-ss-width       { width: 150px; }       /* Service Status column width */
+.col-ds-width       { width: 80px; }        /* Delayed Start column width */
+.col-sm-width       { width: 80px; }        /* Start Mode column width */
+
 .Continue-Pending   { background: #FE2020; color: #92977E; }
 .Paused             { background: #FE2020; color: #2A9D8F; }
 .Pause-Pending      { background: #FE2020; color: #E9C46A; }
@@ -88,6 +94,8 @@ tr:nth-child(odd)   { background: #6E8898; color: #E3E3E3; }
 .Stop-Pending       { background: #FE2020; color: #907163; }
 .Disabled           { background: #FFE400; color: #FE2020; }
 .Manual             { background: #272727; color: #66FCF1; }
+.True-Delay         { background: #5D737E; color: #F0F7EE; }
+.False-Delay        { background: #5D737E; color: #D3D3D3; }
 
 .blink-bg{
 		color:#3FEEE6;
@@ -164,7 +172,7 @@ $Jobs = Invoke-Command -Session $s {
                 # $_.Name -match "RSoPProv" `             -or         <# The one with manual startup (test) #>
                 # $_.Name -match "tzautoupdate" `         -or         <# The one with disabled startup (test) #>
             ) } |
-        Select-Object -Property *, @{Name = 'Server UpTime'; Expression = { $wmiOSUpTime } }
+        Select-Object -Property *, @{Name = 'Server UpTime'; Expression = { $CimOSUpTime } }
 } -AsJob -JobName Marty!
 
 # # Get all the running jobs

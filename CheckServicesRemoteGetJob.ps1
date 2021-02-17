@@ -53,7 +53,7 @@ $CurrentDateText = Get-Date -format "yyyy-MM-dd HH:mm"
 $Path = $PSScriptRoot
 
 # environment name
-$EnvName = "AT_Americas_PD_AOS" #Read-Host -Prompt "Provide parameter file name without .extension"o
+$EnvName = "EnvName" #Read-Host -Prompt "Provide parameter file name without .extension"o
 
 # check if log folder exists / then create
 $invocation = (Get-Variable MyInvocation).Value
@@ -76,7 +76,7 @@ $ReportHTMLFile = "${Path}\_LOG\status_service_html_${CurrentDateLog}.html"
 #variable for Select-Object
 $SelectColumns = 'PSComputerName, Name, StartName, StartMode, State'
 # variable for logo file
-$Logo = '<img style=vertical-align:middle; src="../_RES/Demant_Logo.png" alt="Demant_logo">'
+$Logo = '<img style=vertical-align:middle; src="../_RES/Logo.png" alt="logo">'
 
 # $StatusColor CSS classes to splash some life into the HTML
 $StatusColor = @{ `
@@ -100,9 +100,7 @@ $StatusColor = @{ `
 
 # server list to check from file (CSV)
 #
-# $DNSList = @(Get-Content ${Path}\Ping_Pong\Ping_Pong_ATLAS_EMEA_TEST.csv)
 $DNSList = @(Get-Content "${Path}\Ping_Pong\$($EnvName).txt")
-# $DNSList = @( "BERINPRN02"
 $s = New-PSSession -ComputerName $DNSList -Name Marty-CheckService
 # Write-Output $s
 

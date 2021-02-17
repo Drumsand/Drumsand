@@ -5,13 +5,13 @@ List filtered services status and other details from remote VM's to HTML file
 .DESCRIPTION
 List filtered services status and other details from remote VM's to HTML file
 How to use:
-$Path > $DNSList (check and adjust folder location for your needs)
-   put *.txt file with list of servers. Each server name in separate line. No delimiters.
-   $EnvName is your filename without extension
-Services are matched by Name and DisplayName at $Jobs
-To work paths "$Path" and "${Path}\_LOG" needs to be created!
+   put *.txt file with list of servers to "Ping_Pong" folder. Each server name in separate line. No delimiters.
+   $EnvName is your *.txt filename without extension
+   Services are matched by Name and DisplayName at $Jobs
 
 .NOTES
+v 1.06 | 2021.02.17 |
+- $Path = $PSScriptRoot / script can be run from any location
 
 v 1.05 | 2020.06.10 |
 - CIM CmdLets only now
@@ -47,13 +47,25 @@ Clear-Host
 $CurrentDateLog = Get-Date -format "yyyy-MM-dd_HH-mm-ss"
 $CurrentDateText = Get-Date -format "yyyy-MM-dd HH:mm"
 
-$ErrorActionPreference = "SilentlyContinue"
+# $ErrorActionPreference = "SilentlyContinue"
 
 # get path
-$Path = '\\servername\PS_Script'
+$Path = $PSScriptRoot
 
-# Environment name
-$EnvName = "Ping_Pong_ENV_Region" #Read-Host -Prompt "Provide parameter file name without .extension"
+# environment name
+$EnvName = "AT_Americas_PD_AOS" #Read-Host -Prompt "Provide parameter file name without .extension"o
+
+# check if log folder exists / then create
+$invocation = (Get-Variable MyInvocation).Value
+$directoryPath = Split-Path $invocation.MyCommand.Path
+$directoryPathForLog = $directoryPath + "\" + "_LOG"
+if (!(Test-Path -path $directoryPathForLog)) {
+    New-Item -ItemType directory -Path $directoryPathForLog
+    Write-Host "Folder path has been created successfully at: " $directoryPathForLog
+}
+else {
+    Write-Host "The given folder path $directoryPathForLog already exists";
+}
 
 # variable for logfile path(CSV UTF8)
 $ReportDataFile = "${Path}\_LOG\status_service_data_${CurrentDateLog}.log"
@@ -64,8 +76,94 @@ $ReportHTMLFile = "${Path}\_LOG\status_service_html_${CurrentDateLog}.html"
 #variable for Select-Object
 $SelectColumns = 'PSComputerName, Name, StartName, StartMode, State'
 # variable for logo file
-$Logo = '<img style=vertical-align:middle; src="\\Server_Name\PS_Script\CheckServicesRemoteGetJob\Logo.png" alt="logo">'
+$Logo = '<img style=vertical-align:middle; src="../_RES/Demant_Logo.png" alt="Demant_logo">'
 
+# $StatusColor CSS classes to splash some life into the HTML
+$StatusColor = @{ `
+        'Continue Pending' = ' class="Continue-Pending">Continue Pending<'; # The service has been paused and is about to continue.
+    Paused                 = ' class="Paused">Paused<'; # The service is paused.
+    'Pause Pending'        = ' class="Pause-Pending ">Pause Pending<'; # The service is in the process of pausing.
+    Running                = ' class="Running">Running<'; # The service is running.
+    'Start Pending'        = ' class="blink-bg">Starting<'; # The service is in the process of starting.
+    Stopped                = ' class="Stopped">Stopped<'; # The service is not running.
+    'Stop Pending'         = ' class="Stopping">Stopping<'; # The service is in the process of stopping.
+    Disabled               = ' class="Disabled">Disabled<'; # The startup mode is set to DISABLED
+    Manual                 = ' class="Manual">Manual<'; # The startup mode is set to MANUAL
+    True                   = ' class="True-Delay">True<'; # Delayed startup: True
+    False                  = ' class="False-Delay">False<'; # Delayed startup: False
+    'Server Name'          = ' class="col-sn-width">Server Name<'; # column width
+    'Server Uptime'        = ' class="col-ut-width">Server Uptime<'; # column width
+    'Service Status'       = ' class="col-ss-width">Service Status<'; # column width
+    'Delayed Start'        = ' class="col-ds-width">Delayed Start<'; # column width
+    'Start Mode'           = ' class="col-sm-width">Start Mode<'; # column width
+}
+
+# server list to check from file (CSV)
+#
+# $DNSList = @(Get-Content ${Path}\Ping_Pong\Ping_Pong_ATLAS_EMEA_TEST.csv)
+$DNSList = @(Get-Content "${Path}\Ping_Pong\$($EnvName).txt")
+# $DNSList = @( "BERINPRN02"
+$s = New-PSSession -ComputerName $DNSList -Name Marty-CheckService
+# Write-Output $s
+
+$Jobs = Invoke-Command -Session $s {
+    $Boot = (Get-CimInstance -ClassName win32_operatingsystem | Select-Object LastBootUpTime).lastbootuptime
+    $Today = Get-Date
+    $UpTime = New-TimeSpan -start $Boot -end $Today
+    $CimOSUpTime = If ($UpTime.Days -gt 23) { ' RedClock ' + $UpTime.Days + "d " + $UpTime.Hours + "h " } else { ' GreenClock ' + $UpTime.Days + "d " + $UpTime.Hours + "h " }
+    # (Get-Date) - (Get-CimInstance Win32_OperatingSystem -ComputerName $server).LastBootupTime
+
+    Get-CimInstance -ClassName win32_service |
+    Where {
+        $_.Name -match "AOS60" -or
+        $_.Name -match "ATLAS_" -or <# POS Services #>
+        $_.Name -match "MSSQL" -or
+        $_.Name -match "SQLAgent" -or
+        $_.Name -match "SQLSERVERAGENT" -or
+        $_.Name -match "ReportServer" -or
+        $_.Name -match "Lasernet" -or
+        $_.Name -match "IISADMIN" -or <# IIS #>
+        $_.Name -match "W3SVC" -or <# IIS / World Wide Web Publishing Service #>
+        $_.Name -match "WMSVC" -or <# Web Management Service #>
+        $_.Name -match "CRM" -or
+        $_.Name -match "MSCRM" -or
+        $_.Name -match "Sharepoint" -or <# Sharepoint #>
+        $_.Name -match "appFabric" -or <# Sharepoint appFabric Epos #>
+        ( $_.Name -eq "Spooler" -and $_.PSComputerName -like "*OMS*" ) -or
+        $_.DisplayName -match "Dynamics 365" -or
+        $_.DisplayName -match "Mongo" -and
+        !($_.Name -match "MSSQLFDLauncher")                 <# non-essential SQL #>
+        # $_.Name -match "RSoPProv" `             -or         <# The one with manual startup (test) #>
+        # $_.Name -match "tzautoupdate" `         -or         <# The one with disabled startup (test) #>
+    } |
+    Select-Object -Property *, @{n = 'Server UpTime'; e = { $CimOSUpTime } }
+} -AsJob
+
+# Jobs progress simple no info
+Write-Host " `nJobs running " -F DarkCyan -NoNewline
+while (($Jobs.State -eq "Running") -and ($Jobs.State -ne "NotStarted")) {
+    Write-Host '.' -NoNewline -F DarkCyan
+    Start-Sleep -Seconds 1
+}
+# New line for nice output
+Write-Host "`nJobs finished" -F DarkCyan
+
+# receive job to list services status | sort | export logfile (CSV UTF8)
+Get-Job | Wait-Job | Receive-Job |
+Sort-Object PSComputerName, Service |
+Export-Csv -Path $ReportDataFile -NoTypeInformation -Encoding UTF8 -Delimiter ";"
+
+
+# Kill opened PS Sessions
+Write-Host "Removing Powershell sessions from remote computers"
+Remove-PSSession $s # -Verbose
+# $s | % { Remove-PSSession -Session $s } -Verbose
+
+
+# Create logfile (HTML UTF8)
+# ---
+
+$Title = "Report: Status on machines. Generated on $($CurrentDateText)"
 
 # CSS style for logfile (HTML UTF8)
 $css = @"
@@ -126,15 +224,15 @@ tr:nth-child(odd)   { background: #6E8898; color: #E3E3E3; }
 
 # Values for log. Services
 $GService = Import-Csv $ReportDataFile -Delimiter ";" |
-    Select-Object (
-        @{ n = "Server Name";        e = { $_.PSComputerName } },
-        'Server UpTime',
-        @{ n = "Service";            e = { $_.Name } },
-        @{ n = "Service Status";     e = { $_.State } },
-        @{ n = "Start Mode";         e = { $_.StartMode } },
-        @{ n = "Logon Account";      e = { $_.StartName } },
-        @{ n = "Delayed Start";      e = { $_.DelayedAutoStart } }
-    ) | ConvertTo-HTML -AS Table -Fragment -PreContent '<table><colgroup><col/></colgroup><tr><th><h1>Services on Servers</h1></th></tr>' | Out-String
+Select-Object (
+    @{ n = "Server Name"; e = { $_.PSComputerName } },
+    'Server UpTime',
+    @{ n = "Service"; e = { $_.Name } },
+    @{ n = "Service Status"; e = { $_.State } },
+    @{ n = "Start Mode"; e = { $_.StartMode } },
+    @{ n = "Logon Account"; e = { $_.StartName } },
+    @{ n = "Delayed Start"; e = { $_.DelayedAutoStart } }
+) | ConvertTo-HTML -AS Table -Fragment -PreContent '<table><colgroup><col/></colgroup><tr><th><h1>Services on Servers</h1></th></tr>' | Out-String
 
 # Logfile (HTML UTF8) status color
 $StatusColor.Keys | ForEach-Object { $GService = $GService -replace ">$_<", ($StatusColor.$_) }
@@ -159,7 +257,7 @@ $Check2 = (Import-Csv $ReportDataFile -Delimiter ";").PSComputerName | Sort-Obje
 
 
 $GError = Import-Csv $ReportErrorFile -Delimiter ";" |
-    ConvertTo-Html -AS Table -Fragment -PreContent '<table><colgroup><col/></colgroup><tr><th><h1>Servers not checked </h1></th></tr>' | Out-String
+ConvertTo-Html -AS Table -Fragment -PreContent '<table><colgroup><col/></colgroup><tr><th><h1>Servers not checked </h1></th></tr>' | Out-String
 
 
 #
@@ -172,7 +270,7 @@ ConvertTo-HTML -Title $Title -head $css -PostContent $GService, $GError -PreCont
 
     <table><colgroup><col/></colgroup><tr><th><h1> $($Logo) $($Title)</h1></th></tr>
     " |
-    Out-File $ReportHTMLFile
+Out-File $ReportHTMLFile
 
 
 # put on-screen
@@ -188,7 +286,7 @@ $onscreen | Format-Table -AutoSize -Wrap
 Write-Host ' Jobs Finished ' -BackgroundColor DarkCyan -ForegroundColor White
 Write-Host " "
 Write-Host " Log file path stored in clipboard automatically " -BackgroundColor DarkCyan -ForegroundColor White
-Write-Host " $($ReportHTMLFile) " -BackgroundColor DarkCyan -ForegroundColor White
+Write-Host " $($ReportHTMLFile) " #-BackgroundColor DarkCyan -ForegroundColor White
 
 # servers NOT checked
 #Write-Host " "
@@ -196,7 +294,7 @@ Write-Host " $($ReportHTMLFile) " -BackgroundColor DarkCyan -ForegroundColor Whi
 #Write-Host "$($ListCompare)" -BackgroundColor Black -ForegroundColor Red
 
 # Replace details in HTML
-(Get-Content $ReportHTMLFile).replace('GreenClock',' &#128338; ') | Set-Content $ReportHTMLFile
+(Get-Content $ReportHTMLFile).replace('GreenClock', ' &#128338; ') | Set-Content $ReportHTMLFile
 (Get-Content $ReportHTMLFile).replace('RedClock', ' &#x1F534; ') | Set-Content $ReportHTMLFile
 
 # open logfile (HTML UTF8) and temporary file cleanup

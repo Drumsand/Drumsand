@@ -34,7 +34,7 @@ v 1.01 | 2019.08.16 |
 - basic script is ready.
 
 .LINK
-
+https://raw.githubusercontent.com/Drumsand/Drumsand/master/Add_multiple_printers_ports_multiple_servers.ps1
 #>
 
 
@@ -52,7 +52,7 @@ $Path = $PSScriptRoot
 [string[]]$logFolder = "_LOG_printers"
 [string[]]$logPath = "${path}\$logFolder"
 [string[]]$ConfFile = "Printer_conf_list_CSV.csv"
-[array[]] $printers = Import-Csv "${path}\$($ConfFile)" -Delimiter ","
+[array[]] $printers = Import-Csv "${path}\$($ConfFile)" -Delimiter ";" #semicolon
 [array[]] $driversConf = $printers.Driver | Select-Object -Unique
 #  $driversConf +="Kiwi" # for testing break full loop logic
 [array[]] $driverCheck = @()
@@ -73,7 +73,7 @@ function Get-logDate() {
 # check if log folder exists / then create if needed
 $invocation = (Get-Variable MyInvocation).Value
 $directoryPath = Split-Path $invocation.MyCommand.Path
-$directoryPathForLog = $directoryPath + "\" + "_LOG"
+$directoryPathForLog = $directoryPath + "\" + $logFolder
 if (!(Test-Path -path $directoryPathForLog)) {
     New-Item -ItemType directory -Path $directoryPathForLog
     "`n`rFolder path has been created successfully at: $directoryPathForLog`n`r"

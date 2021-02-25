@@ -12,10 +12,13 @@ Results are separated in sections:
 3.	Total number of printer malfunctions on queried print servers
 4.	Total number of errors on queried print servers
 How to use:
-   $PrintServer     = put print server names you would like to check in style:
+   $PrintServer    = put print server names you would like to check in style:
                                ("server_name_01", "server_name_02", ...)
-   $PrintCheckName  = put printer names you would like to check in style:
+   $PrintCheckName = put printer names you would like to check in style:
                                ("printer_Name_01", "printer_Name_02", ...)
+   Ie.:
+   $PrintServer    = 'KBNBSOMS11', 'KBNBSOMS12'
+   $PrintCheckName = "PRN_HML_ST_SH_MARK_CLR_01", "PRN_FIR_0FL_LandingArea_01", "QADASTRO_STN_P237_364e", "PRN_BRN_MP_C3002"
    Run and investigate results
 
 .NOTES

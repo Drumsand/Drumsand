@@ -1,10 +1,44 @@
-$PrintServer = 'KBNBSOMS11', 'KBNBSOMS12'
-$PrintCheckName = "PRN_HML_ST_SH_MARK_CLR_01", "PRN_FIR_0FL_LandingArea_01", "QADASTRO_STN_P237_364e", "PRN_BRN_MP_C3002"
+<#
+.SYNOPSIS
+Check current errors on several print servers.
+For comments and needed functions please contact: drumsand@gmail.com
+Any updates will be available in link below [.LINK]
 
-$Props_CurrentErrors = @{e = { $_.PSComputerName }; l = "Print Server" }, @{e = { $_.Name }; l = "Printer Name" }, "JobCount", $PrinterStatus, "Type", @{e = { $_.DriverName }; l = "Driver Name" }, "PortName", "Shared", "Published", "DeviceType"
-$Props_SpoolerErrors = @{e = { $_.PSComputerName }; l = "Print Server" }, @{e = { $_.Name }; l = "Printer Name" }, @{e = { $_.jobs }; l = "Queue" }, "TotalJobsPrinted", "JobErrors"
-$Props_JobErrors = @{e = { $_.PSComputerName }; l = "Print Server" }, @{e = { $_.PrinterName }; l = "Printer Name" }, "ID", "JobStatus", "UserName"
-$PrintIssueFilter = "Normal", "Offline", "TonerLow", "PaperOut"
+.DESCRIPTION
+Check current errors on several print servers.
+Results are separated in sections:
+1.	Current errors in printer jobs for queried printers
+2.	Job errors on queried printers’ driver - additional data not visible in print server console
+3.	Total number of printer malfunctions on queried print servers
+4.	Total number of errors on queried print servers
+How to use:
+   $PrintServer     = put print server names you would like to check in style:
+                               ("server_name_01", "server_name_02", ...)
+   $PrintCheckName  = put printer names you would like to check in style:
+                               ("printer_Name_01", "printer_Name_02", ...)
+   Run and investigate results
+
+.NOTES
+v 1.02 | 2021.02.25 |
+- see decription
+
+
+v 1.01 | 2020.04.20 |
+- basic script. Gets print job ID to later kill it. Now deprecated due to security tightening.
+
+.LINK
+https://raw.githubusercontent.com/Drumsand/Drumsand/master/GetPrinterJobStatus_extended.ps1
+#>
+
+$PrintServer              = 'KBNBSOMS11', 'KBNBSOMS12'
+$PrintCheckName           = "PRN_HML_ST_SH_MARK_CLR_01", "PRN_FIR_0FL_LandingArea_01", "QADASTRO_STN_P237_364e", "PRN_BRN_MP_C3002"
+
+$Props_CurrentErrors      = @{e = { $_.PSComputerName }; l = "Print Server" }, @{e = { $_.Name }; l = "Printer Name" }, "JobCount", $PrinterStatus, "Type", @{e = { $_.DriverName }; l = "Driver Name" }, "PortName", "Shared", "Published", "DeviceType"
+$Props_SpoolerErrors      = @{e = { $_.PSComputerName }; l = "Print Server" }, @{e = { $_.Name }; l = "Printer Name" }, @{e = { $_.jobs }; l = "Queue" }, "TotalJobsPrinted", "JobErrors"
+$Props_JobErrors          = @{e = { $_.PSComputerName }; l = "Print Server" }, @{e = { $_.PrinterName }; l = "Printer Name" }, "ID", "JobStatus", "UserName"
+$Props_Sort               = "Printer Name", "Print Server"
+$Props_Sort_SpoolerErrors = @{e = "Queue"; descending = $true }, @{ e = "Print Server" }
+$PrintIssueFilter         = "Normal", "Offline", "TonerLow", "PaperOut"
 
 $PrinterStatus = @{
     Name       = 'PrinterStatus'
@@ -35,14 +69,14 @@ $session = New-CimSession -Comp $PrintServer -Name CheckQueue -SkipTestConnectio
     $PrintTotal = Get-CimInstance -ClassName Win32_PerfFormattedData_Spooler_PrintQueue -CimSession $session | Where-Object { $_.jobs -gt 0 -or $_.JobErrors -gt 0 }
 Remove-CimSession $session
 
-Write-Host "`n Current errors in printer jobs for queried printers `n" -ForegroundColor Black -BackgroundColor White
-$PrintCheck | Select $Props_CurrentErrors | Sort "Printer Name", "Print Server" | FT -auto
+Write-Host "`n 1. Current errors in printer jobs for queried printers `n" -ForegroundColor Black -BackgroundColor White
+$PrintCheck | Select $Props_CurrentErrors | Sort $Props_Sort | FT -auto
 
-Write-Host "`n Job errors on queried printers driver - additional data not visible in print server console `n" -ForegroundColor Black -BackgroundColor White
-$PrintJobError | Select $Props_JobErrors | Sort "Printer Name", "Print Server"| FT -auto
+Write-Host "`n 2. Job errors on queried printers driver - additional data not visible in print server console `n" -ForegroundColor Black -BackgroundColor White
+$PrintJobError | Select $Props_JobErrors | Sort $Props_Sort | FT -auto
 
-Write-Host "`n Total number of printer malfunctions on queried print servers `n" -ForegroundColor Black -BackgroundColor White
-$PrintIssue | Select $Props_CurrentErrors | Sort "Printer Name", "Print Server" | FT -auto
+Write-Host "`n 3. Total number of printer malfunctions on queried print servers `n" -ForegroundColor Black -BackgroundColor White
+$PrintIssue | Select $Props_CurrentErrors | Sort $Props_Sort | FT -auto
 
-Write-Host "`n Total number of errors on queried print servers `n" -ForegroundColor Black -BackgroundColor White
-$PrintTotal | Select $Props_SpoolerErrors | Sort -Desc Queue, "Print Server" | FT -auto
+Write-Host "`n 4. Total number of errors on queried print servers `n" -ForegroundColor Black -BackgroundColor White
+$PrintTotal | Select $Props_SpoolerErrors | Sort @Props_Sort_SpoolerErrors  | FT -auto

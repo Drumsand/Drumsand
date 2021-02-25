@@ -106,7 +106,7 @@ foreach ($server in $servers) {
             }
             $t = $host.ui.RawUI.ForegroundColor
             $host.ui.RawUI.ForegroundColor = "RED"
-            "$(Get-logDate) | $($server) | Printer Driver: $($driver) not installed!" | Tee-Object @teeParam
+            "$(Get-logDate) | $($server) | Printer Driver: $($driverName) not installed!" | Tee-Object @teeParam
             $host.ui.RawUI.ForegroundColor = $t
         }
     }

@@ -33,13 +33,13 @@ v 1.01 | 2020.04.20 |
 https://raw.githubusercontent.com/Drumsand/Drumsand/master/GetPrinterJobStatus_extended.ps1
 #>
 
-$PrintServer              = 'KBNBSOMS11', 'KBNBSOMS12'
-$PrintCheckName           = "PRN_HML_ST_SH_MARK_CLR_01", "PRN_FIR_0FL_LandingArea_01", "QADASTRO_STN_P237_364e", "PRN_BRN_MP_C3002"
+$PrintServer    = 'KBNBSOMS11', 'KBNBSOMS12'
+$PrintCheckName = "PRN_HML_ST_SH_MARK_CLR_01", "PRN_FIR_0FL_LandingArea_01", "QADASTRO_STN_P237_364e", "PRN_BRN_MP_C3002"
 
 $Props_CurrentErrors      = @{e = { $_.PSComputerName }; l = "Print Server" }, @{e = { $_.Name }; l = "Printer Name" }, "JobCount", $PrinterStatus, "Type", @{e = { $_.DriverName }; l = "Driver Name" }, "PortName", "Shared", "Published", "DeviceType"
 $Props_SpoolerErrors      = @{e = { $_.PSComputerName }; l = "Print Server" }, @{e = { $_.Name }; l = "Printer Name" }, @{e = { $_.jobs }; l = "Queue" }, "TotalJobsPrinted", "JobErrors"
 $Props_JobErrors          = @{e = { $_.PSComputerName }; l = "Print Server" }, @{e = { $_.PrinterName }; l = "Printer Name" }, "ID", "JobStatus", "UserName"
-$Props_Sort               = "Printer Name", "Print Server"
+$Props_Sort = "Printer Name", "Print Server"
 $Props_Sort_SpoolerErrors = @{e = "Queue"; descending = $true }, @{ e = "Print Server" }
 $PrintIssueFilter         = "Normal", "Offline", "TonerLow", "PaperOut"
 
@@ -61,15 +61,15 @@ $PrinterStatus = @{
     }
 }
 
-$session = New-CimSession -Comp $PrintServer -Name CheckQueue -SkipTestConnection
-    $PrintCheck = Get-Printer -CimSession $session  | ? { $_.Name -in $PrintCheckName }
-    $PrintJobError = ForEach ($device in $PrintCheckName) {
-        Get-PrintJob -PrinterName $device -CimSession $session | ? JobStatus -match "error"
-    }
-    # $PrintJobError =  Get-CimInstance -ClassName Win32_PrintJob -ComputerName $PrintServer | ? { $_.Name -in $PrintCheckName -and $_.JobStatus -match "error" }
-    # $PrintJobError = Get-PrintJob -CimSession $session | ? { $_.PrinterName -in $PrintCheckName -and $_.JobStatus -match "error" }
-    $PrintIssue = Get-Printer -CimSession $session  | ? { $_.PrinterStatus -notin $PrintIssueFilter } # try -in
-    $PrintTotal = Get-CimInstance -ClassName Win32_PerfFormattedData_Spooler_PrintQueue -CimSession $session | Where-Object { $_.jobs -gt 0 -or $_.JobErrors -gt 0 }
+$session       = New-CimSession -Comp $PrintServer -Name CheckQueue -SkipTestConnection
+$PrintCheck    = Get-Printer -CimSession $session  | ? { $_.Name -in $PrintCheckName }
+$PrintJobError = ForEach ($device in $PrintCheckName) {
+    Get-PrintJob -PrinterName $device -CimSession $session | ? JobStatus -match "error"
+}
+# $PrintJobError =  Get-CimInstance -ClassName Win32_PrintJob -ComputerName $PrintServer | ? { $_.Name -in $PrintCheckName -and $_.JobStatus -match "error" }
+# $PrintJobError = Get-PrintJob -CimSession $session | ? { $_.PrinterName -in $PrintCheckName -and $_.JobStatus -match "error" }
+$PrintIssue    = Get-Printer -CimSession $session  | ? { $_.PrinterStatus -notin $PrintIssueFilter } # try -in
+$PrintTotal    = Get-CimInstance -ClassName Win32_PerfFormattedData_Spooler_PrintQueue -CimSession $session | Where-Object { $_.jobs -gt 0 -or $_.JobErrors -gt 0 }
 Remove-CimSession $session
 
 Write-Host "`n 1. Current errors in printer jobs for queried printers `n" -ForegroundColor Black -BackgroundColor White

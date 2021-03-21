@@ -6,12 +6,12 @@ Import-Module oh-my-posh
 Import-Module Get-ChildItemColor
 Set-PoshPrompt -Theme agnosterplus
 
-# permanent credential for automate use with CmdLets using "-Credential"
+# sysAdmin creds
 $da = Get-Credential 'DEMANT\a-krpl'
-$PSDefaultParameterValues.Add("*:Credential",$da)
-
 # Save credentials for future use
 $da | Export-Clixml -Path c:\a.clixml
+# permanent credential for automate use with CmdLets using "-Credential"
+$PSDefaultParameterValues.Add("*:Credential",(Import-Clixml -Path C:\a.clixml))
 # Use the saved credentials when needed
 $savedCreds = Import-Clixml -Path C:\a.clixml
 

@@ -5,6 +5,7 @@
 $servers = "KBNDBSQL44", "KBNDVSQL108", "XAUDZSQL02", "XAUDZSQL03"<#, "MAIDBSQL18", "MAIDBSQL24", "STNDBSQL10", "STNTSSQL06", "STNDBSQL09", "STNDBSQL12", "STNDBSQL11", "STNDBSQL02", "RIODBSQL01", "XAUNASQL07", "XAUDBSQL06", "XHKDBSQL31", "XHKDBSQL130" #>
 
 # Properties to present in table from functions
+$props_VMType         = "ServerName", "Model", "Manfacturer", "PSComputerName"
 $props_CoresConf      = "ServerName", "CoreID", "NumberOfCores", <# "NumberOfEnabledCore", #> "NumberOfLogicalProcessors"# , "SocketDesignation" win2k3 property
 $props_CoresUsage     = "ServerName", "TimeStamp", @{ Expression = 'UsageValue'; align = "right" }, @{ Expression = 'CoreName'; align = "right" }
 
@@ -13,6 +14,17 @@ $props_Sort_CoresUsage = "ServerName", @{ Expression = 'UsageValue'; Descending 
 
 $ErrorActionPreference = "SilentlyContinue" # Tested all errors due to Powershell V4 installed on older machines
 $s = New-PSSession -Comp $servers -ea 0 # -ThrottleLimit 4 #-InDisconnectedSession
+
+function Get-VMType {
+    $VMType = Get-CimInstance -Class Win32_ComputerSystem | Select-Object Model, Manufacturer, PSComputerName
+    foreach ($VM in $VMType) {
+        New-Object pscustomobject -Property @{
+            ServerName = $env:computername
+            VM_Model   = $VM.Model
+            VM_Type    = $VM.Manufacturer
+        }
+    }
+}
 
 function Get-CoresConf {
     if ($PSVersionTable.PSVersion.Major -le 5) {
@@ -49,8 +61,9 @@ function Get-CoresUsage {
     }
 }
 
-# jobs to send funtions as query for opened sessions
-$CoresConf = Invoke-Command -ScriptBlock ${function:Get-CoresConf} -AsJob -Session $s | receive-job -wait -AutoRemoveJob
+# jobs to send funtions for opened sessions
+$VMType     = Invoke-Command -ScriptBlock ${function:Get-VMtype} -AsJob -Session $s | receive-job -wait -AutoRemoveJob
+$CoresConf  = Invoke-Command -ScriptBlock ${function:Get-CoresConf} -AsJob -Session $s | receive-job -wait -AutoRemoveJob
 $coresUsage = Invoke-Command -ScriptBlock ${function:Get-CoresUsage} -AsJob -Session $s | receive-job -wait -AutoRemoveJob
 
 # present data
@@ -59,16 +72,24 @@ $notChecked = (compare-object $servers $s.computername).InputObject
 # split
 $ofs = ', '
 if ($notChecked) { Write-Warning "Servers that cannot be connected: $($notChecked -split $ofs)" }
+""
 
-$CoresConf | Format-Table -Property $props_CoresConf -Auto
-
+# Results
+#
 # Present value of total processor use with new variable $coresUsageTotal
+# VM type and model
+# Cores configuration and usage
 $coresUsageTotal = $coresUsage | Where-Object { $_.CoreName -eq "_Total" }
-foreach ($srv in $s.ComputerName) { "Total percent of processor usage on $($srv) is $(($coresUsageTotal | Where-Object { $_.PSComputerName -eq $srv }).UsageValue) %" }
-# Remove total usage number from $coresUsage
-$coresUsage = $coresUsage | Where-Object { $_.CoreName -ne "_Total" }
-# present results of cores use on each server
-$coresUsage | Sort-Object -Property $props_Sort_CoresUsage | Format-Table -Property $props_CoresUsage -AutoSize
+foreach ($srv in $s.ComputerName) { 
+    "Total percent of processor usage on $($srv) is $(($coresUsageTotal | Where-Object { $_.PSComputerName -eq $srv }).UsageValue) %"
+    "VM type on $($srv) is $(($VMType | Where-Object { $_.PSComputerName -eq $srv }).VM_Type), model $(($VMType | Where-Object { $_.PSComputerName -eq $srv }).VM_Model)"
+    $CoresConf | Where-Object { $_.PSComputerName -eq $srv } | Format-Table -Property $props_CoresConf -Auto
+    # Remove total usage number from $coresUsage
+    $coresUsage = $coresUsage | Where-Object { $_.CoreName -ne "_Total" }
+    # present results of cores use on each server
+    $coresUsage | Where-Object {$_.PSComputerName -eq $srv} | Sort-Object -Property $props_Sort_CoresUsage | Format-Table -Property $props_CoresUsage -AutoSize
+    ""
+}
 
 # security wise - close all gates behind you
 Remove-PSSession $s

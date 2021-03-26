@@ -1,31 +1,20 @@
 # user
 $global:DefaultUser = [System.Environment]::UserName
+#paths
+$env:Path += ";C:\Users\krpl\OneDrive - Demant\Documents\_Script\PS_Script;C:\_TEMP\PS_Script"
 # Modules import
 Import-Module posh-git
 Import-Module oh-my-posh
 Import-Module Get-ChildItemColor
 Set-PoshPrompt -Theme agnosterplus
 
-# sysAdmin creds
-$da = Get-Credential 'DEMANT\a-krpl'
-# Save credentials for future use
-$da | Export-Clixml -Path c:\a.clixml
-# permanent credential for automate use with CmdLets using "-Credential"
-$PSDefaultParameterValues.Add("*:Credential",(Import-Clixml -Path C:\a.clixml))
-# Use the saved credentials when needed
-$savedCreds = Import-Clixml -Path C:\a.clixml
+#Add Verbose to specific commands
+# set credentials usage for specific cmdlets
+$PSDefaultParameterValues['*-Dba*:Verbose'] = $True
+# $PSDefaultParameterValues['Get-WmiObject-*:Verbose'] = $True
+$PSDefaultParameterValues['Get-VM:Verbose'] = $True
 
-# $Hash = @{
-#     'Admin'      = Get-Credential -Message 'Please enter administrative credentials'
-#     'RemoteUser' = Get-Credential -Message 'Please enter remote user credentials'
-#     'User'       = Get-Credential -Message 'Please enter user credentials'
-# }
-# $Hash | Export-Clixml -Path "${env:\userprofile}\Hash.Cred"
-# # $Hash = Import-CliXml -Path "${env:\userprofile}\Hash.Cred"
-# Invoke-Command -ComputerName Server01 -Credential $Hash.Admin -ScriptBlock {whoami}
-# Invoke-Command -ComputerName Server01 -Credential $Hash.RemoteUser -ScriptBlock {whoami}
-# Invoke-Command -ComputerName Server01 -Credential $Hash.User -ScriptBlock {whoami}
-
+#functions
 function switch-psuser {
     
     Param(
@@ -45,4 +34,54 @@ function switch-psuser {
     New-PSSession -Credential $cred | Enter-PSSession
 }
 
+function Save-Cred {
+    $da = @{
+        'Admin'      = Get-Credential -Message 'Please enter administrative credentials'
+        # 'RemoteUser' = Get-Credential -Message 'Please enter remote user credentials'
+        'User'       = Get-Credential -Message 'Please enter user credentials'
+    }
+    # Save credentials for future use
+    $da | Export-Clixml -Path "${env:\userprofile}\Hash.Cred"
+}
+
+# sysAdmin/User creds
+
+# Full path of the file
+$fileCreds = "${env:\userprofile}\Hash.Cred"
+#If the file does not exist, create it.
+if (!(Test-Path -Path $fileCreds -PathType Leaf)) {
+     try {
+        Save-Cred
+     }
+     catch {
+         throw $_.Exception.Message
+     }
+ }
+# If the file already exists, show the message and do nothing.
+ else {
+     Write-Host "Credential CliXML file [$fileCreds] already exists."
+ }
+
+# would you kindly update your credentials
+$updateCreds = Read-Host -Prompt "Would you kindly update your credentials?[y/n]"
+if ( $updateCreds -match "[yY]" ) { 
+    Save-Cred
+}
+
+# permanent credential for automate use with CmdLets using "-Credential"
+$PSDefaultParameterValues.Add('*-Dba*:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
+$PSDefaultParameterValues.Add('Get-Wmi*:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
+$PSDefaultParameterValues.Add('Get-VM:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
+# Use the saved credentials when needed
+$aCreds = (Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin
+$uCreds = (Import-Clixml -Path "${env:\userprofile}\Hash.Cred").User
+
+Invoke-Command -ComputerName KBNDBMGT02 -Credential $aCreds -ScriptBlock {$env:username}
+# Invoke-Command -ComputerName KBNDBMGT02 -Credential $Hash.RemoteUser -ScriptBlock {whoami}
+# Invoke-Command -ComputerName KBNDBMGT02 -Credential $uCreds -ScriptBlock {$env:username}
+
+
+# environment details
 (Get-Host).Version
+"`nEnvironemnt variables - Paths`n"
+$env:Path -split ";" | Sort-Object -Descending

@@ -2,7 +2,7 @@
 # but it will query VM's up to V3
 
 # list of servers to be checked
-$servers = "KBNDBSQL44", "KBNDVSQL108", "XAUDZSQL02", "XAUDZSQL03"<#, "MAIDBSQL18", "MAIDBSQL24", "STNDBSQL10", "STNTSSQL06", "STNDBSQL09", "STNDBSQL12", "STNDBSQL11", "STNDBSQL02", "RIODBSQL01", "XAUNASQL07", "XAUDBSQL06", "XHKDBSQL31", "XHKDBSQL130" #>
+$servers = 
 
 # Properties to present in table from functions
 $props_VMType         = "ServerName", "Model", "Manfacturer", "PSComputerName"

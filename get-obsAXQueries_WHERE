@@ -1,0 +1,204 @@
+<#
+.SYNOPSIS
+Script name: get-totalCPUusage.ps1
+Check all running on SQL proceses from AX Dynamics and provide SPID's of those that fall under the scope.
+Scope can be found in WHERE clause at SQL SP in this script.
+
+.DESCRIPTION
+This query is written to check all running on SQL process from AX Dynamics and provide SPID's of those that fall under the scope.
+Scope can be found in WHERE clause at SQL SP in this script.
+$CPUlvl - this value will trigger check and prepare KILL statements for SQL if needed (filtering based on Stored Procedure).
+
+Script should be run directly on SQL machine.
+
+Stored Procedure for SQL is placed at $sql_procedure variable and called "GetLong01".
+SP is placed in DBA_ADMIN database.
+SP is being removed and saved at each time this script is run.
+    This way script needs to be updated if needed only.
+
+    This script will stop at any error.
+
+Two separate PowerShell functions are used:
+    Get-CoresUsage: to gather SQL CPU total use
+    Get-RidOF:      based on values filters and prepares SQL KILL statement, separate for each faulty query.
+
+.NOTES
+
+v 1.03 | 2022.05.23
+
+- SP WHERE clause right now differientate between AX user/batch based on:
+    processing time, last SQL batch running, hostname, user name
+    other factors proved to be not necessary.
+
+v 1.02 | 2022.05.16
+- 24h schedule, running each 15 minutes
+- tuned for AX user/batch queries that are freezed/lost in AX
+- used to prevent high CPU use rather than acting upon it.
+
+v 1.01 | 2022.04.05 |
+- Fully tested script is ready.
+
+TODO: fully parametrized Powershell Invoke-SQLCmd
+
+
+.LINK
+https://raw.githubusercontent.com/Drumsand/Drumsand/get-obsAXQueries_WHERE/
+#>
+
+
+$ErrorActionPreference = "Stop"
+$CPUlvl         = 20
+$sqlQTimeout    = 60
+$procName       = "GetLong02" # if changed, remember to update SP for SQL.
+
+$sqlProcCreateParams = @{
+    ServerInstance  = "(local)"
+    Database        = "db"
+    QueryTimeout    = $sqlQTimeout
+    Query           = $SQL_procedure
+    OutputSqlErrors = $true
+    Verbose         = $true
+}
+
+$sqlProcRunParams = @{
+    ServerInstance  = "(local)"
+    Database        = "db"
+    QueryTimeout    = $sqlQTimeout
+    Query           = 'EXEC ' + $procName
+    OutputSqlErrors = $true
+    Verbose         = $true
+}
+
+$sqlKillParams = @{
+    ServerInstance  = "(local)"
+    QueryTimeout    = $sqlQTimeout
+    Query           = $sqlQuery
+    OutputSqlErrors = $true
+    Verbose         = $true 
+}
+
+$sql_procedure  = @'
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'dbo.GetLong02') AND type in (N'P', N'PC'))
+    DROP PROCEDURE dbo.GetLong02
+GO
+
+CREATE PROCEDURE dbo.GetLong02
+AS 
+BEGIN
+SELECT  sys.spid
+        , sys.cmd AS Command
+        -- db_name(spu.databASe_id) AS databASe_name
+        -- , ses.session_id
+        -- , sys.kpid
+        , sys.blocked
+        -- , sys.waittype
+        , sys.waittime
+        , ses.open_transaction_count AS open_trans
+        , CASE
+                WHEN at.transaction_state in (0,1) THEN 'init'
+                WHEN at.transaction_state = 2 THEN 'active'
+                WHEN at.transaction_state = 3 THEN 'ended'
+                WHEN at.transaction_state = 4 THEN 'committing'
+                WHEN at.transaction_state = 6 THEN 'comitted'
+                WHEN at.transaction_state = 7 THEN 'rolling back' 
+                WHEN at.transaction_state = 6 THEN 'rolled back'
+                        else 'other'
+                END AS trans_state
+        , AXUSER = CASE ASCII(cast(sys.Context_info AS varchar(128)))
+                WHEN 0 THEN 'N/A'
+                        ELSE (
+                                select userid from sysclientsessions C
+                                        where
+                                                cast ((substring(cast(sys.context_info AS varchar(128)),
+                                                CHARINDEX(' ',cast(sys.context_info AS varchar(128)),2),
+                                                CHARINDEX(' ',cast(sys.context_info AS varchar(128)),CHARINDEX(' ',cast(sys.context_info AS varchar(128)),2) + 1)
+                                                        - CHARINDEX(' ',cast(sys.context_info AS varchar(128)),2)))
+                                                        AS BIGINT) = C.sessionid
+                        )
+                END
+        -- , ast.elapsed_time_seconds / 60 AS elapsed_min
+        , ast.elapsed_time_seconds AS elapsed_sec
+        , sys.hostname
+        -- , dbid, uid
+        , sys.last_batch
+        , at.transaction_begin_time AS begin_time
+        , sys.lastwaittype
+        -- , sys.waitresource
+        , cpu
+        , physical_io
+        , memusage
+        , ses.row_count
+        , (spu.user_objects_alloc_page_count * 8) AS user_objects_kb
+        , (spu.user_objects_dealloc_page_count * 8) AS user_objects_deallocated_kb
+        , (spu.internal_objects_alloc_page_count * 8) AS internal_objects_kb
+        , (spu.internal_objects_dealloc_page_count * 8) AS internal_objects_deallocated_kb
+        , ses.program_name
+FROM sys.dm_tran_active_snapshot_database_transactions ast
+        JOIN sys.dm_tran_active_transactions at on at.transaction_id = ast.transaction_id
+        JOIN sys.dm_exec_sessions ses ON ses.session_id = ast.session_id
+        JOIN sys.dm_db_session_space_usage spu ON spu.session_id = ses.session_id
+        JOIN sys.sysprocesses sys on sys.spid = ses.session_id
+WHERE
+        /* to find AX batches lost in AX */
+    ast.elapsed_time_seconds > 1440
+    AND sys.Context_info LIKE '%Svc_%'
+    AND sys.last_batch < DATEADD(minute,-22,GETDATE())
+    AND sys.hostname IN ('srv01', 'srv02')
+        OR
+        /* to find user queries lost in AX and faulty web queries */
+    ast.elapsed_time_seconds > 720
+    AND sys.Context_info NOT LIKE '%Svc_%'
+    AND sys.last_batch < DATEADD(minute,-10,GETDATE())
+    AND sys.hostname NOT IN ('srv01', 'srv02')
+ORDER BY elapsed_time_seconds DESC;
+END
+GO
+'@
+
+function Get-CoresUsage {
+    if ($PSVersionTable.PSVersion.Major -le 5) {
+        $res = Get-CimInstance -ClassName Win32_PerfFormattedData_PerfOS_Processor | Select-Object Name, PercentProcessorTime
+    }
+    else {
+        $res = Get-CimInstance -Query "Select Name, PercentProcessorTime from Win32_PerfFormattedData_PerfOS_Processor" # this could be us, but we keep old PS.4!
+    }
+    foreach ($single in $res) {
+        New-Object pscustomobject -Property @{
+            TimeStamp  = Get-Date -format "yyyy-MM-dd HH:mm:ss"
+            ServerName = $env:computername
+            UsageValue = ($single.PercentProcessorTime)#.ToString("d3")
+            CoreName   = $single.Name
+        }
+    }
+}
+
+function Get-RidOF {
+        [cmdletbinding()]
+    param (
+        [string]$spid
+    )
+
+    if ($coresUsageTotal -gt $CPUlvl) {
+        foreach ($spid in $teSalutant.spid) {
+            $sqlQuery = "KILL $($spid)"
+            Invoke-SqlCmd -ServerInstance "(local)" -Database "db" -Query $sqlQuery -Verbose
+        }
+    }
+}
+
+# remove/add stored procedure (SP)
+Invoke-SqlCmd @sqlProcCreateParams
+
+# check total CPU usage
+$coresUsage = Invoke-Command -ScriptBlock ${function:Get-CoresUsage} # -AsJob | receive-job -wait -AutoRemoveJob
+# Cores usage
+$coresUsageTotal = $($coresUsage | Where-Object { $_.CoreName -eq "_Total" }).UsageValue
+Write-Host "`nP-AXSQL01 server CPU usage: $($coresUsageTotal)`n"
+
+# execute the SP and collected the errors
+$teSalutant = Invoke-SqlCmd @sqlProcRunParams
+$teSalutant | Format-Table -AutoSize
+
+# select SPIDs to be KILLed
+$spid2Kill = Invoke-Command -ScriptBlock ${function:Get-RidOF}
+$spid2Kill | Format-Table -AutoSize

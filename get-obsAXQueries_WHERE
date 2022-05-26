@@ -46,37 +46,6 @@ https://raw.githubusercontent.com/Drumsand/Drumsand/get-obsAXQueries_WHERE/
 #>
 
 
-$ErrorActionPreference = "Stop"
-$CPUlvl         = 20
-$sqlQTimeout    = 60
-$procName       = "GetLong02" # if changed, remember to update SP for SQL.
-
-$sqlProcCreateParams = @{
-    ServerInstance  = "(local)"
-    Database        = "db"
-    QueryTimeout    = $sqlQTimeout
-    Query           = $SQL_procedure
-    OutputSqlErrors = $true
-    Verbose         = $true
-}
-
-$sqlProcRunParams = @{
-    ServerInstance  = "(local)"
-    Database        = "db"
-    QueryTimeout    = $sqlQTimeout
-    Query           = 'EXEC ' + $procName
-    OutputSqlErrors = $true
-    Verbose         = $true
-}
-
-$sqlKillParams = @{
-    ServerInstance  = "(local)"
-    QueryTimeout    = $sqlQTimeout
-    Query           = $sqlQuery
-    OutputSqlErrors = $true
-    Verbose         = $true 
-}
-
 $sql_procedure  = @'
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'dbo.GetLong02') AND type in (N'P', N'PC'))
     DROP PROCEDURE dbo.GetLong02
@@ -140,20 +109,58 @@ FROM sys.dm_tran_active_snapshot_database_transactions ast
         JOIN sys.sysprocesses sys on sys.spid = ses.session_id
 WHERE
         /* to find AX batches lost in AX */
-    ast.elapsed_time_seconds > 1440
-    AND sys.Context_info LIKE '%Svc_%'
-    AND sys.last_batch < DATEADD(minute,-22,GETDATE())
-    AND sys.hostname IN ('srv01', 'srv02')
+    ast.elapsed_time_seconds > 2520
+    --AND sys.Context_info LIKE '%Svc_AXPR%'
+    AND sys.last_batch < DATEADD(second,-2440,GETDATE())
+    AND sys.hostname IN ('BATCHA-P04', 'P-AXAOS08', 'P-AXAOS09', 'P-AXA0S010')
         OR
         /* to find user queries lost in AX and faulty web queries */
     ast.elapsed_time_seconds > 720
-    AND sys.Context_info NOT LIKE '%Svc_%'
-    AND sys.last_batch < DATEADD(minute,-10,GETDATE())
-    AND sys.hostname NOT IN ('srv01', 'srv02')
-ORDER BY elapsed_time_seconds DESC;
+    --AND sys.Context_info NOT LIKE '%Svc_AXPR%'
+    AND sys.last_batch < DATEADD(second,-600,GETDATE())
+    AND sys.hostname NOT IN ('BATCHA-P04', 'P-AXAOS08', 'P-AXAOS09', 'P-AXA0S010')
 END
 GO
 '@
+
+
+$ErrorActionPreference  = "Stop"
+$CPUlvl         = 5
+$sqlQTimeout    = 60
+$procName       = "GetLong02" # if changed, remember to update SP for SQL.
+
+$sqlProcCreateParams = @{
+    ServerInstance  = "(local)"
+    Database        = "AX2012PROD"
+    QueryTimeout    = $sqlQTimeout
+    Query           = $SQL_procedure
+    OutputSqlErrors = $true
+    Verbose         = $true
+}
+
+$sqlProcRunParams = @{
+    ServerInstance  = "(local)"
+    Database        = "AX2012PROD"
+    QueryTimeout    = $sqlQTimeout
+    Query           = 'EXEC ' + $procName
+    OutputSqlErrors = $true
+    Verbose         = $true
+}
+
+$sqlKillParams = @{
+    ServerInstance  = "(local)"
+    QueryTimeout    = $sqlQTimeout
+    Query           = $sqlQuery
+    OutputSqlErrors = $true
+    Verbose         = $true 
+}
+
+$props_sort_teSalutant  = @{ expression = 'elapsed_sec'; Descending = $true }
+$props_teSalutant       = "spid", "Command", "blocked", @{ label = 'AX_USER'; expression='AXUSER' } , @{ label='Elapsed [sec]'; expression = 'elapsed_sec'; align = "right" }, @{ label='HostName'; expression='hostname' } 
+
+function Get-logDate() {
+    Get-Date -format "yyyy-MM-dd HH:mm"
+}
 
 function Get-CoresUsage {
     if ($PSVersionTable.PSVersion.Major -le 5) {
@@ -172,16 +179,14 @@ function Get-CoresUsage {
     }
 }
 
-function Get-RidOF {
-        [cmdletbinding()]
-    param (
-        [string]$spid
-    )
+function Get-RidOF { 
 
     if ($coresUsageTotal -gt $CPUlvl) {
         foreach ($spid in $teSalutant.spid) {
-            $sqlQuery = "KILL $($spid)"
-            Invoke-SqlCmd -ServerInstance "(local)" -Database "db" -Query $sqlQuery -Verbose
+            $sqlQuery = "KILL $($spid)" | Out-String
+            # Invoke-SqlCmd @sqlKillParams
+            Invoke-SqlCmd -ServerInstance "(local)" -Database "database" -Query $sqlQuery -Verbose
+            "`n $(Get-logDate) | SQL spid $($spid) was terminated."
         }
     }
 }
@@ -190,15 +195,14 @@ function Get-RidOF {
 Invoke-SqlCmd @sqlProcCreateParams
 
 # check total CPU usage
-$coresUsage = Invoke-Command -ScriptBlock ${function:Get-CoresUsage} # -AsJob | receive-job -wait -AutoRemoveJob
+$coresUsage = Get-CoresUsage # -AsJob | receive-job -wait -AutoRemoveJob
 # Cores usage
 $coresUsageTotal = $($coresUsage | Where-Object { $_.CoreName -eq "_Total" }).UsageValue
-Write-Host "`nP-AXSQL01 server CPU usage: $($coresUsageTotal)`n"
+Write-Host "`n $(Get-logDate) | $(get-content env:computername) server CPU usage: $($coresUsageTotal) [%]`n"
 
 # execute the SP and collected the errors
 $teSalutant = Invoke-SqlCmd @sqlProcRunParams
-$teSalutant | Format-Table -AutoSize
+$teSalutant | Sort-Object -Property $props_sort_teSalutant | Format-Table -Property $props_teSalutant -AutoSize 
 
 # select SPIDs to be KILLed
-$spid2Kill = Invoke-Command -ScriptBlock ${function:Get-RidOF}
-$spid2Kill | Format-Table -AutoSize
+Get-RidOF

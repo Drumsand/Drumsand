@@ -25,7 +25,7 @@ Two separate PowerShell functions are used:
 .NOTES
 
 v 1.04 | 2022.05.26
-Now fully used splatting
+- Now fully used splatting
 
 v 1.03 | 2022.05.23
 - SP WHERE clause right now differientate between AX user/batch based on:

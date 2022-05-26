@@ -24,8 +24,10 @@ Two separate PowerShell functions are used:
 
 .NOTES
 
-v 1.03 | 2022.05.23
+v 1.04 | 2022.05.26
+Now fully used splatting
 
+v 1.03 | 2022.05.23
 - SP WHERE clause right now differientate between AX user/batch based on:
     processing time, last SQL batch running, hostname, user name
     other factors proved to be not necessary.
@@ -38,13 +40,10 @@ v 1.02 | 2022.05.16
 v 1.01 | 2022.04.05 |
 - Fully tested script is ready.
 
-TODO: fully parametrized Powershell Invoke-SQLCmd
-
 
 .LINK
 https://raw.githubusercontent.com/Drumsand/Drumsand/master/get-obsAXQueries_WHERE
 #>
-
 
 $sql_procedure  = @'
 IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'dbo.GetLong02') AND type in (N'P', N'PC'))
@@ -103,22 +102,27 @@ SELECT  sys.spid
         , (spu.internal_objects_dealloc_page_count * 8) AS internal_objects_deallocated_kb
         , ses.program_name
 FROM sys.dm_tran_active_snapshot_database_transactions ast
-        JOIN sys.dm_tran_active_transactions at on at.transaction_id = ast.transaction_id
-        JOIN sys.dm_exec_sessions ses ON ses.session_id = ast.session_id
-        JOIN sys.dm_db_session_space_usage spu ON spu.session_id = ses.session_id
-        JOIN sys.sysprocesses sys on sys.spid = ses.session_id
+        JOIN sys.dm_tran_active_transactions at 
+            ON at.transaction_id = ast.transaction_id
+        LEFT JOIN sys.dm_exec_sessions ses
+            ON ses.program_name like '%Dynamics%' 
+                AND ses.session_id = ast.session_id
+        JOIN sys.dm_db_session_space_usage spu 
+            ON spu.session_id = ses.session_id
+        JOIN sys.sysprocesses sys
+            ON sys.spid = ses.session_id
 WHERE
-        /* to find AX batches lost in AX */
-    ast.elapsed_time_seconds > 2520
-    --AND sys.Context_info LIKE '%Svc_AXPR%'
-    AND sys.last_batch < DATEADD(second,-2440,GETDATE())
-    AND sys.hostname IN ('BATCHA-P04', 'P-AXAOS08', 'P-AXAOS09', 'P-AXA0S010')
-        OR
-        /* to find user queries lost in AX and faulty web queries */
-    ast.elapsed_time_seconds > 720
-    --AND sys.Context_info NOT LIKE '%Svc_AXPR%'
-    AND sys.last_batch < DATEADD(second,-600,GETDATE())
-    AND sys.hostname NOT IN ('BATCHA-P04', 'P-AXAOS08', 'P-AXAOS09', 'P-AXA0S010')
+            /* to find AX batches lost in AX */
+        ast.elapsed_time_seconds > 2520
+        --AND sys.Context_info LIKE '%Svc%'
+        AND sys.last_batch < DATEADD(second,-2440,GETDATE())
+        AND sys.hostname IN 
+            OR
+            /* to find user queries lost in AX and faulty web queries */
+        ast.elapsed_time_seconds > 720
+        --AND sys.Context_info NOT LIKE '%Svc_%'
+        --AND sys.last_batch < DATEADD(second,-600,GETDATE())
+        AND sys.hostname NOT IN ('svc1', 'svc2', 'srv3', ...)
 END
 GO
 '@
@@ -131,7 +135,7 @@ $procName       = "GetLong02" # if changed, remember to update SP for SQL.
 
 $sqlProcCreateParams = @{
     ServerInstance  = "(local)"
-    Database        = "AX2012PROD"
+    Database        = "database"
     QueryTimeout    = $sqlQTimeout
     Query           = $SQL_procedure
     OutputSqlErrors = $true
@@ -140,7 +144,7 @@ $sqlProcCreateParams = @{
 
 $sqlProcRunParams = @{
     ServerInstance  = "(local)"
-    Database        = "AX2012PROD"
+    Database        = "database"
     QueryTimeout    = $sqlQTimeout
     Query           = 'EXEC ' + $procName
     OutputSqlErrors = $true
@@ -149,14 +153,15 @@ $sqlProcRunParams = @{
 
 $sqlKillParams = @{
     ServerInstance  = "(local)"
+    Database        = "database"
     QueryTimeout    = $sqlQTimeout
     Query           = $sqlQuery
     OutputSqlErrors = $true
     Verbose         = $true 
 }
 
-$props_sort_teSalutant  = @{ expression = 'elapsed_sec'; Descending = $true }
-$props_teSalutant       = "spid", "Command", "blocked", @{ label = 'AX_USER'; expression='AXUSER' } , @{ label='Elapsed [sec]'; expression = 'elapsed_sec'; align = "right" }, @{ label='HostName'; expression='hostname' } 
+$props_sort_teSalutant  = @{ expression = 'elapsed_sec'; descending = $true }
+$props_teSalutant       = "spid", "Command", "blocked", @{ label = 'AX_USER'; expression='AXUSER' }, @{ label='Elapsed [sec]'; expression = 'elapsed_sec'; align = "right" }, @{ label='Host Name'; expression='hostname' } 
 
 function Get-logDate() {
     Get-Date -format "yyyy-MM-dd HH:mm"
@@ -171,7 +176,7 @@ function Get-CoresUsage {
     }
     foreach ($single in $res) {
         New-Object pscustomobject -Property @{
-            TimeStamp  = Get-Date -format "yyyy-MM-dd HH:mm:ss"
+            TimeStamp  = Get-logDate #Get-Date -format "yyyy-MM-dd HH:mm:ss"
             ServerName = $env:computername
             UsageValue = ($single.PercentProcessorTime)#.ToString("d3")
             CoreName   = $single.Name
@@ -179,14 +184,17 @@ function Get-CoresUsage {
     }
 }
 
-function Get-RidOF { 
+function Get-RidOF {
+        [cmdletbinding()]
+    param (
+        [string]$spid
+    )
 
     if ($coresUsageTotal -gt $CPUlvl) {
         foreach ($spid in $teSalutant.spid) {
-            $sqlQuery = "KILL $($spid)" | Out-String
-            # Invoke-SqlCmd @sqlKillParams
-            Invoke-SqlCmd -ServerInstance "(local)" -Database "database" -Query $sqlQuery -Verbose
-            "`n $(Get-logDate) | SQL spid $($spid) was terminated."
+            $sqlKillParams['Query'] = "KILL $($spid)"
+            Invoke-SqlCmd @sqlKillParams
+            Write-Host "$(Get-logDate) | SQL spid $($spid) was terminated."
         }
     }
 }
@@ -196,13 +204,13 @@ Invoke-SqlCmd @sqlProcCreateParams
 
 # check total CPU usage
 $coresUsage = Get-CoresUsage # -AsJob | receive-job -wait -AutoRemoveJob
-# Cores usage
+# Total Cores usage 
 $coresUsageTotal = $($coresUsage | Where-Object { $_.CoreName -eq "_Total" }).UsageValue
-Write-Host "`n $(Get-logDate) | $(get-content env:computername) server CPU usage: $($coresUsageTotal) [%]`n"
+Write-Host "$(Get-logDate) | $(get-content env:computername) server CPU usage: $($coresUsageTotal) [%]"
 
 # execute the SP and collected the errors
 $teSalutant = Invoke-SqlCmd @sqlProcRunParams
 $teSalutant | Sort-Object -Property $props_sort_teSalutant | Format-Table -Property $props_teSalutant -AutoSize 
 
-# select SPIDs to be KILLed
+# selected in $teSalutant SPIDs to be KILLed
 Get-RidOF

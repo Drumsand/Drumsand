@@ -11,7 +11,7 @@ $CPUlvl - this value will trigger check and prepare KILL statements for SQL if n
 
 Script should be run directly on SQL machine.
 
-Stored Procedure for SQL is placed at $sql_procedure variable and called "GetLong01".
+Stored Procedure for SQL is placed at $sql_procedure variable and called "GetLong02".
 SP is placed in DBA_ADMIN database.
 SP is being removed and saved at each time this script is run.
     This way script needs to be updated if needed only.

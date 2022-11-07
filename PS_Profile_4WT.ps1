@@ -1,12 +1,16 @@
 # user
 $global:DefaultUser = [System.Environment]::UserName
+# PoSh theme
+$poShTh = "froczh" # "clean-detailed"
 #paths
-$env:Path += ";C:\Users\krpl\OneDrive - Demant\Documents\_Script\PS_Script;C:\_TEMP\PS_Script"
-# Modules import
-Import-Module posh-git
-Import-Module oh-my-posh
+$env:Path += "
+	;C:\Users\kryple\AppData\Local\Programs\oh-my-posh\;
+	C:\Users\kryple\AppData\Local\Programs\oh-my-posh\themes\;
+"
+## Modules import
+oh-my-posh init pwsh | Invoke-Expression
+oh-my-posh init pwsh --config "C:\Users\kryple\AppData\Local\Programs\oh-my-posh\themes\$($poShTh).omp.json" | Invoke-Expression
 Import-Module Get-ChildItemColor
-Set-PoshPrompt -Theme agnosterplus
 
 #Add Verbose to specific commands
 # set credentials usage for specific cmdlets
@@ -20,13 +24,13 @@ function switch-psuser {
     Param(
         [Parameter(Position=0)]
         [ValidateSet("adminsystem","administrator")]
-        $User = "adminsystem"
+        $User = "administrator"
     )
 
     switch($User)
     {
-        'adminsystem'   { $username = "EMEA\krpl" ; $pw = "pw"}
-        'administrator' { $username = "DEMANT\a-krpl" ; $pw = "pw" }
+        # 'adminsystem'   { $username = "EMEA\krpl" ; $pw = "pw"}
+        'administrator' { $username = "CHANGadminkryple" ; $pw = "pw" }
     }
 
     $password = $pw | ConvertTo-SecureString -AsPlainText -Force
@@ -42,6 +46,11 @@ function Save-Cred {
     }
     # Save credentials for future use
     $da | Export-Clixml -Path "${env:\userprofile}\Hash.Cred"
+	
+	# permanent credential for automate use with CmdLets using "-Credential"
+	$PSDefaultParameterValues.Add('*-Dba*:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
+	$PSDefaultParameterValues.Add('Get-Wmi*:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
+	$PSDefaultParameterValues.Add('Get-VM:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
 }
 
 # sysAdmin/User creds
@@ -68,20 +77,16 @@ if ( $updateCreds -match "[yY]" ) {
     Save-Cred
 }
 
-# permanent credential for automate use with CmdLets using "-Credential"
-$PSDefaultParameterValues.Add('*-Dba*:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
-$PSDefaultParameterValues.Add('Get-Wmi*:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
-$PSDefaultParameterValues.Add('Get-VM:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
 # Use the saved credentials when needed
 $aCreds = (Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin
-$uCreds = (Import-Clixml -Path "${env:\userprofile}\Hash.Cred").User
+# $uCreds = (Import-Clixml -Path "${env:\userprofile}\Hash.Cred").User
 
-Invoke-Command -ComputerName KBNDBMGT02 -Credential $aCreds -ScriptBlock {$env:username}
+# Invoke-Command -ComputerName KBNDBMGT02 -Credential $aCreds -ScriptBlock {$env:username}
 # Invoke-Command -ComputerName KBNDBMGT02 -Credential $Hash.RemoteUser -ScriptBlock {whoami}
 # Invoke-Command -ComputerName KBNDBMGT02 -Credential $uCreds -ScriptBlock {$env:username}
 
 
 # environment details
 (Get-Host).Version
-"`nEnvironemnt variables - Paths`n"
-$env:Path -split ";" | Sort-Object -Descending
+# "`nEnvironemnt variables - Paths`n"
+# $env:Path -split ";" | Sort-Object -Descending

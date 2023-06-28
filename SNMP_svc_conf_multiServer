@@ -1,0 +1,44 @@
+# PowerShell script to set SNMP service and PRTG configuration for this service
+
+# list of remote servers
+$servers = "D-XX", "D-XX", "D-XX", "D-XX"
+
+# $ErrorActionPreference = "SilentlyContinue"
+$s = New-PSSession -ComputerName $servers  #-ea 0 #-ThrottleLimit 4 #-InDisconnectedSession
+
+function Set-SNMP {
+    # SNMP service and admin console install and config
+    Install-WindowsFeature SNMP-Service #-Verbose
+    # Install-WindowsFeature RSAT-SNMP #-Verbose
+
+    # Set SNMP Contact to XXXX
+    Set-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\SNMP\Parameters\RFC1156Agent\ -Name sysContact -Value "COMPANY_IT"
+
+    # Set Community to XXXX and READ-ONLY
+    Set-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\SNMP\Parameters\ValidCommunities\ -Name 'PRTG_XX' -Value 4
+
+    # Set allowed accepted Host
+    Set-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\SNMP\Parameters\PermittedManagers\ -Name 2 -Value "p-XX"
+    Set-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\SNMP\Parameters\PermittedManagers\ -Name 3 -Value "p-XX"
+    Set-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\SNMP\Parameters\PermittedManagers\ -Name 4 -Value "p-XX"
+
+    # Restart service
+    Restart-Service SNMP
+}
+
+
+# jobs to send funtions for opened sessions
+$SNMP = Invoke-Command -ScriptBlock ${function:Set-SNMP} -AsJob -Session $s | receive-job -wait -AutoRemoveJob
+
+# present data
+# Check which servers didn't get to pssession. Not checked.
+$notChecked = (compare-object $servers $s.computername).InputObject
+# split
+$ofs = ', ' # because $servers variable has ', ' in string
+if ($notChecked) { Write-Warning "Servers that cannot be connected: $($notChecked -split $ofs)" }
+""
+# Results?
+$SNMP
+
+# security wise - close all gates behind you
+Remove-PSSession $s

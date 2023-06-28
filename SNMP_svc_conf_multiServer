@@ -38,7 +38,7 @@ $ofs = ', ' # because $servers variable has ', ' in string
 if ($notChecked) { Write-Warning "Servers that cannot be connected: $($notChecked -split $ofs)" }
 ""
 # Results?
-$SNMP
+$SNMP | Select-Object -Property PSComputername, RestartNeeded, ExitCode, Success | Format-Table -AutoSize
 
 # security wise - close all gates behind you
 Remove-PSSession $s

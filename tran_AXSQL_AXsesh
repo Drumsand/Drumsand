@@ -12,15 +12,17 @@
 
     To see processing requests on AX and TempDB:
     WHERE 
-      db_name(ses.database_id) != N'master' 
-      AND ses.[nt_user_name] IS NOT NULL 
-      AND ser.cpu_time IS NOT NULL
+        db_name(ses.database_id) != N'master' 
+        AND ser.[status] IS NOT NULL
+        AND ses.[nt_user_name] IS NOT NULL 
 
     To see all sessions in SQL on AX and TempDB:
     WHERE 
-      db_name(ses.database_id) != N'master' 
-      AND ses.[nt_user_name] IS NOT NULL 
-      -- AND ser.cpu_time IS NOT NULL
+        db_name(ses.database_id) != N'master' 
+        -- AND ser.[status] IS NOT NULL
+        AND ses.[nt_user_name] IS NOT NULL 
+        AND spu.internal_objects_alloc_page_count IS NOT NULL
+        AND spu.internal_objects_alloc_page_count != 0
 
 .NOTES
     Subqueries 'SYSCLIENTSESSIONS AS scs' use TOP 1, ORDER BY scs.RECID DESC.
@@ -141,7 +143,7 @@ SELECT
                         CHARINDEX(' ',CAST(ses.context_info AS VARCHAR(128)),2) + 1) - CHARINDEX(' ',CAST(ses.context_info AS VARCHAR(128)),2)) = abh.SESSIONIDX
                 WHERE 
                     abj.STATUS IN ( 2, 3, 5, 6, 7) --( 2, 3, 5, 6, 7)
-                        AND abh.[STATUS] NOT IN (1, 3, 4, 5)
+                        AND abh.[STATUS] NOT IN (1, 3, 4, 5)   -- test option 20230929 (issue with corect BATCH name present when not in use)
                         AND ses.context_info IS NOT NULL  -- test option 20230623
             )
     END
@@ -177,9 +179,8 @@ WHERE
 
     -- AND ses.program_name LIKE N'azdata%'
     -- AND ses.program_name LIKE N'%SQLAgent%'
-    -- AND ses.host_name IN (N'P-AXAOS02')
+    -- AND ses.host_name NOT IN (N'P-AXBATCH01')
     -- AND ses.session_id IN (291)
-    -- AND ses.context_info LIKE N'%mar%'
     -- AND ast.transaction_id IS NOT NULL                  --
     -- AND ast.elapsed_time_seconds IS NOT NULL            --
     -- AND ser.query_hash IS NOT NULL

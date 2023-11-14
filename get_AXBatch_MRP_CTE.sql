@@ -17,7 +17,7 @@
 -- ================================================
 -- Author: DrumSand
 -- Creation Date: 2023.02
---
+-- Git: https://raw.githubusercontent.com/Drumsand/Drumsand/master/get_AXBatch_MRP_CTE.sql
 -- Modified Date: 2023.11.14
 -- Version 1.2
 -- ================================================

@@ -10,7 +10,7 @@
     How to use:
     Run in the context of Dynamics AX database
 
-    To see processing requests on AX and TempDB:
+    To see processing requests on AX:
     WHERE 
         db_name(ses.database_id) != N'master' WITH CTE_SessionInfo AS (
     SELECT
@@ -81,7 +81,7 @@ SELECT [SQL_Sesh] = CASE
     , tat.name AS [Tx_name]
     -- , GETDATE() AS [RecTime]
     -- , [tr_isolation] = CASE ses.transaction_isolation_level
-    -- WHEN 0 THEN 'Unspecified'(@results_row_count int,@interval_start_time datetimeoffset(7),@interval_end_time datetimeoffset(7))SELECT TOP (@results_row_count)     p.query_id query_id,     q.object_id object_id,     ISNULL(OBJECT_NAME(q.object_id),'') object_name,     qt.query_sql_text query_sql_text,     ROUND(CONVERT(float, SUM(rs.avg_duration*rs.count_executions))*0.001,2) total_duration,     SUM(rs.count_executions) count_executions,     COUNT(distinct p.plan_id) num_plans FROM sys.query_store_runtime_stats rs     JOIN sys.query_store_plan p ON p.plan_id = rs.plan_id     JOIN sys.query_store_query q ON q.query_id = p.query_id     JOIN sys.query_store_query_text qt ON q.query_text_id = qt.query_text_id WHERE NOT (rs.first_execution_time > @interval_end_time OR rs.last_execution_time < @interval_start_time) GROUP BY p.query_id, qt.query_sql_text, q.object_id HAVING COUNT(distinct p.plan_id) >= 2 ORDER BY total_duration DESC
+    -- WHEN 0 THEN 'Unspecified'
     -- WHEN 1 THEN 'ReadUncommitted'
     -- WHEN 2 THEN 'ReadCommitted'
     -- WHEN 3 THEN 'RepeatableRead'
@@ -228,9 +228,9 @@ LEFT JOIN sys.dm_tran_active_transactions AS tat
 LEFT JOIN sys.dm_db_session_space_usage AS spu
     ON spu.session_id = ses.session_id
 WHERE 1 = 1
-    -- AND ses.is_user_process = 1
-    -- AND ser.wait_type NOT LIKE N'VDI_CLIENT_%'-- ‘by-design’ behavior where the system threads that are created for the seeding (on the primary and other replicas) will remain until the instances are rebooted, even after seeding has completed.
-    -- AND NOT db_name(ses.database_id) = N'master'
+    -- AND ses.is_user_process = 1                   -- background (SQL Engine) processes
+    -- AND ser.wait_type NOT LIKE N'VDI_CLIENT_%'    -- 'by-design' behavior where the system threads that are created for the seeding (on the primary and other replicas) will remain until the instances are rebooted, even after seeding has completed.
+    -- AND NOT db_name(ses.database_id) = N'master'  -- processes on 'master' db
     AND (
         @uName IS NULL
         OR (

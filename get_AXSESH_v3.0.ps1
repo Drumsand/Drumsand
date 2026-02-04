@@ -1,3 +1,52 @@
+<#
+.SYNOPSIS
+Script name: get-obsoleteAXQuery.ps1
+Check all AX Dynamics processes running in SQL TempDB and provide SPID's of those that fall under the scope.
+Scope can be found in WHERE clause at SQL SP in this script.
+
+.DESCRIPTION
+This query is written to check all AX Dynamics processes running in SQL TempDB and provide SPID's of those that fall under the scope.
+Scope can be found in WHERE clause at SQL SP in this script.
+$CPUlvl... - this value will trigger check and prepare KILL statements for SQL if needed (filtering based on Stored Procedure).
+
+Script should be run directly on SQL machine.
+
+If run from Tasks Scheduler, try to use:
+@echo off
+PowerShell -NoProfile -ExecutionPolicy Bypass -Command "& {Start-Process PowerShell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ""path\file.ps1""'}"
+
+Stored Procedure for SQL is placed at $sql_procedure variable and called "GetLong02".
+SP is placed in DBA_ADMIN database.
+SP is being removed and saved at each time this script is run.
+    This way script needs to be updated if needed only.
+
+    This script will stop at any error.
+
+Two separate PowerShell functions are used:
+    Get-CoresUsage: to gather SQL CPU total use
+    Get-RidOF:      based on values filters and prepares SQL KILL statement, separate for each faulty query.
+
+.NOTES
+
+v 1.04 | 2022.05.26
+Now fully used splatting
+
+v 1.03 | 2022.05.23
+- SP WHERE clause right now differientate between AX user/batch based on:
+    processing time, last SQL batch running, hostname, user name
+    other factors proved to be not necessary.
+
+v 1.02 | 2022.05.16
+- 24h schedule, running each 15 minutes
+- tuned for AX user/batch queries that are freezed/lost in AX
+- used to prevent high CPU use rather than acting upon it.
+
+v 1.01 | 2022.04.05 |
+- Fully tested script is ready.
+
+v 1.02 | 2025.05.10
+- log to SQL table
+
 #---------------------------------------------------------------
 # Script Parameters & Configuration
 #---------------------------------------------------------------
@@ -394,4 +443,5 @@ if ($coresUsageTotal -gt $CPUlvlLow) {
     else {
         Write-Output "No sessions to update. `$filteredSessions is null or empty."
     }
+
 }

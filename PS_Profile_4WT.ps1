@@ -41,14 +41,14 @@ $DefaultParamConfig = @{
     )
 }
 
-# Splat config 4 function Secret Config (pass vault)
-$SecretConfig = @{
-    SecretName        = 'Profile.DefaultCredential'
-    VaultName         = 'LocalStore'
-    SetAsDefaultVault = $true
-    PromptForUpdate   = $true
-    UpdatePromptText  = 'Would you kindly update your credentials? [Y/N]'
-}
+# # Splat config 4 function Secret Config (pass vault)
+# $SecretConfig = @{
+#     SecretName        = 'Profile.DefaultCredential'
+#     VaultName         = 'LocalStore'
+#     SetAsDefaultVault = $true
+#     PromptForUpdate   = $true
+#     UpdatePromptText  = 'Would you kindly update your credentials? [Y/N]'
+# }
 
 
 
@@ -178,52 +178,52 @@ function Initialize-OhMyPosh {
     }
 }
 
-# =========================================================
-# Ensure SecretManagement Module is installed
-#   designed for splatting: Initialize-OhMyPosh @ProfileConfig
-# =========================================================
-function Ensure-SecretModules {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [hashtable]$Config
-    )
+# # =========================================================
+# # Ensure SecretManagement Module is installed
+# #   designed for splatting: Initialize-OhMyPosh @ProfileConfig
+# # =========================================================
+# function Ensure-SecretModules {
+#     [CmdletBinding()]
+#     param(
+#         [Parameter(Mandatory)]
+#         [hashtable]$Config
+#     )
 
-    foreach ($mod in 'Microsoft.PowerShell.SecretManagement','Microsoft.PowerShell.SecretStore') {
-        if (-not (Get-Module -ListAvailable -Name $mod)) {
-            Write-Warning "$mod not installed. Install it from PSGallery if you want secure credential storage."
-            return
-        }
-    }
+#     foreach ($mod in 'Microsoft.PowerShell.SecretManagement','Microsoft.PowerShell.SecretStore') {
+#         if (-not (Get-Module -ListAvailable -Name $mod)) {
+#             Write-Warning "$mod not installed. Install it from PSGallery if you want secure credential storage."
+#             return
+#         }
+#     }
 
-    Import-Module Microsoft.PowerShell.SecretManagement -ErrorAction SilentlyContinue
-    Import-Module Microsoft.PowerShell.SecretStore      -ErrorAction SilentlyContinue
-}
+#     Import-Module Microsoft.PowerShell.SecretManagement -ErrorAction SilentlyContinue
+#     Import-Module Microsoft.PowerShell.SecretStore      -ErrorAction SilentlyContinue
+# }
 
-# Ensure Vault registration
-function Ensure-SecretVault {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [hashtable]$Config
-    )
+# # Ensure Vault registration
+# function Ensure-SecretVault {
+#     [CmdletBinding()]
+#     param(
+#         [Parameter(Mandatory)]
+#         [hashtable]$Config
+#     )
 
-    if (-not (Get-Command Get-SecretVault -ErrorAction SilentlyContinue)) { return }
+#     if (-not (Get-Command Get-SecretVault -ErrorAction SilentlyContinue)) { return }
 
-    $vault = Get-SecretVault -Name $Config.VaultName -ErrorAction SilentlyContinue
+#     $vault = Get-SecretVault -Name $Config.VaultName -ErrorAction SilentlyContinue
 
-    if (-not $vault) {
-        $registerSplat = @{
-            Name         = $Config.VaultName
-            ModuleName   = 'Microsoft.PowerShell.SecretStore'
-            DefaultVault = $Config.SetAsDefaultVault
-        }
-        Register-SecretVault @registerSplat | Out-Null
-    }
-    elseif ($Config.SetAsDefaultVault -and -not $vault.IsDefault) {
-        Set-SecretVaultDefault -Name $Config.VaultName
-    }
-}
+#     if (-not $vault) {
+#         $registerSplat = @{
+#             Name         = $Config.VaultName
+#             ModuleName   = 'Microsoft.PowerShell.SecretStore'
+#             DefaultVault = $Config.SetAsDefaultVault
+#         }
+#         Register-SecretVault @registerSplat | Out-Null
+#     }
+#     elseif ($Config.SetAsDefaultVault -and -not $vault.IsDefault) {
+#         Set-SecretVaultDefault -Name $Config.VaultName
+#     }
+# }
 
 # =============================
 # Call bootstrap early
@@ -319,7 +319,8 @@ Set-ProfileDefaultParameters -Config $DefaultParamConfig
 # ------------------------------------------------------------
 
 
-
+# ------------------------------------------------------------
 # environment details
-(Get-Host).Version
-$env:Path -split ";" | Sort-Object -Descending
+# ------------------------------------------------------------
+Write-Host "PS $($PSVersionTable.PSVersion) [$($PSVersionTable.PSEdition)] in $($Host.Name)" -ForegroundColor Cyan
+# $env:Path -split ";" | Sort-Object -Descending

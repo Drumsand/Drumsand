@@ -17,22 +17,16 @@
 
 # Splat config 4 OMP
 $ProfileConfig = @{
-    # Theme name without extension, or a built-in theme name
-    # If a file "<ThemeName>.omp.json" exists at the chosen path, it will be used.
-    PoshThemeName         = 'froczh'
-
-    # Where to look for your theme config file first.
-    # $true  => use your PowerShell profile folder (portable, recommended)
-    # $false => use LocalAppData OMP themes folder (machine-specific)
+        # If a file "<ThemeName>.omp.json" exists at the chosen path, it will be used.
+    PoshThemeName         = 'froczh'    
+        # $true  => use your PowerShell profile folder (portable, recommended)
+        # $false => use LocalAppData OMP themes folder (machine-specific)
     PreferUserProfilePath = $true
-
-    # Optional auto-update behavior (OFF by default; safer for profiles)
+        # Optional auto-update behavior (OFF by default; safer for profiles)
     AutoUpdateOhMyPosh    = $false
-
-    # Controls header chatter (Write-Verbose) for troubleshooting
+        # Controls header chatter (Write-Verbose) for troubleshooting
     VerboseBootstrap      = $false
-
-    # Optional: allow creating the profile directory if missing
+        # Optional: allow creating the profile directory if missing
     EnsureProfileDir      = $true
 }
 
@@ -46,6 +40,16 @@ $DefaultParamConfig = @{
         # @{ Pattern = 'Invoke-Sqlcmd*'; Params = @{ ErrorAction = 'Stop' } }
     )
 }
+
+# Splat config 4 function Secret Config (pass vault)
+$SecretConfig = @{
+    SecretName        = 'Profile.DefaultCredential'
+    VaultName         = 'LocalStore'
+    SetAsDefaultVault = $true
+    PromptForUpdate   = $true
+    UpdatePromptText  = 'Would you kindly update your credentials? [Y/N]'
+}
+
 
 
 # ==========================================
@@ -174,6 +178,53 @@ function Initialize-OhMyPosh {
     }
 }
 
+# =========================================================
+# Ensure SecretManagement Module is installed
+#   designed for splatting: Initialize-OhMyPosh @ProfileConfig
+# =========================================================
+function Ensure-SecretModules {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [hashtable]$Config
+    )
+
+    foreach ($mod in 'Microsoft.PowerShell.SecretManagement','Microsoft.PowerShell.SecretStore') {
+        if (-not (Get-Module -ListAvailable -Name $mod)) {
+            Write-Warning "$mod not installed. Install it from PSGallery if you want secure credential storage."
+            return
+        }
+    }
+
+    Import-Module Microsoft.PowerShell.SecretManagement -ErrorAction SilentlyContinue
+    Import-Module Microsoft.PowerShell.SecretStore      -ErrorAction SilentlyContinue
+}
+
+# Ensure Vault registration
+function Ensure-SecretVault {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [hashtable]$Config
+    )
+
+    if (-not (Get-Command Get-SecretVault -ErrorAction SilentlyContinue)) { return }
+
+    $vault = Get-SecretVault -Name $Config.VaultName -ErrorAction SilentlyContinue
+
+    if (-not $vault) {
+        $registerSplat = @{
+            Name         = $Config.VaultName
+            ModuleName   = 'Microsoft.PowerShell.SecretStore'
+            DefaultVault = $Config.SetAsDefaultVault
+        }
+        Register-SecretVault @registerSplat | Out-Null
+    }
+    elseif ($Config.SetAsDefaultVault -and -not $vault.IsDefault) {
+        Set-SecretVaultDefault -Name $Config.VaultName
+    }
+}
+
 # =============================
 # Call bootstrap early
 # =============================
@@ -199,6 +250,68 @@ function Set-ProfileDefaultParameters {
 
 Set-ProfileDefaultParameters -Config $DefaultParamConfig
 
+# # Call Credentials (secretManagement)
+# function Read-YesNoOrSkip {
+#     [CmdletBinding()]
+#     param(
+#         [Parameter(Mandatory)]
+#         [string]$Prompt
+#     )
+
+#     $answer = Read-Host -Prompt $Prompt
+
+#     if ([string]::IsNullOrWhiteSpace($answer)) {
+#         return $null   # ENTER = skip
+#     }
+
+#     return ($answer -match '^[yY]')
+# }
+
+# # Call to update credentials (secretManagement)
+# function Get-ProfileCredential {
+#     [CmdletBinding()]
+#     param(
+#         [Parameter(Mandatory)]
+#         [hashtable]$Config
+#     )
+
+#     if (-not (Get-Command Get-Secret -ErrorAction SilentlyContinue)) {
+#         return $null
+#     }
+
+#     $existing = Get-Secret -Name $Config.SecretName -ErrorAction SilentlyContinue
+
+#     if ($existing -and $Config.PromptForUpdate) {
+
+#         $shouldUpdate = Read-YesNoOrSkip -Prompt $Config.UpdatePromptText
+
+#         if ($null -eq $shouldUpdate) { return $existing }   # ENTER
+#         if (-not $shouldUpdate)      { return $existing }   # N
+#     }
+
+#     if (-not $existing -or $shouldUpdate) {
+
+#         $newCred = Get-Credential -Message 'Enter credentials to store securely in vault.'
+
+#         if ($null -eq $newCred) {
+#             return $existing
+#         }
+
+#         $setSplat = @{
+#             Name        = $Config.SecretName
+#             Secret      = $newCred
+#             Vault       = $Config.VaultName
+#             ErrorAction = 'Stop'
+#         }
+
+#         Set-Secret @setSplat
+#         return $newCred
+#     }
+
+#     return $existing
+# }
+
+
 
 
 # ------------------------------------------------------------
@@ -206,75 +319,7 @@ Set-ProfileDefaultParameters -Config $DefaultParamConfig
 # ------------------------------------------------------------
 
 
-#functions
-function switch-psuser {
-    
-    Param(
-        [Parameter(Position=0)]
-        [ValidateSet("adminsystem","administrator")]
-        $User = "administrator"
-    )
-
-    switch($User)
-    {
-        # 'adminsystem'   { $username = "EMEA\krpl" ; $pw = "pw"}
-        'administrator' { $username = "CHANGadminkryple" ; $pw = "pw" }
-    }
-
-    $password = $pw | ConvertTo-SecureString -AsPlainText -Force
-    $cred = New-Object System.Management.Automation.PSCredential -ArgumentList $username,$password
-    New-PSSession -Credential $cred | Enter-PSSession
-}
-
-function Save-Cred {
-    $da = @{
-        'Admin'      = Get-Credential -Message 'Please enter administrative credentials'
-        # 'RemoteUser' = Get-Credential -Message 'Please enter remote user credentials'
-        'User'       = Get-Credential -Message 'Please enter user credentials'
-    }
-    # Save credentials for future use
-    $da | Export-Clixml -Path "${env:\userprofile}\Hash.Cred"
-	
-	# permanent credential for automate use with CmdLets using "-Credential"
-	$PSDefaultParameterValues.Add('*-Dba*:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
-	$PSDefaultParameterValues.Add('Get-Wmi*:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
-	$PSDefaultParameterValues.Add('Get-VM:Credential',(Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin)
-}
-
-# sysAdmin/User creds
-
-# Full path of the file
-$fileCreds = "${env:\userprofile}\Hash.Cred"
-#If the file does not exist, create it.
-if (!(Test-Path -Path $fileCreds -PathType Leaf)) {
-     try {
-        Save-Cred
-     }
-     catch {
-         throw $_.Exception.Message
-     }
- }
-# If the file already exists, show the message and do nothing.
- else {
-     Write-Host "Credential CliXML file [$fileCreds] already exists."
- }
-
-# would you kindly update your credentials
-$updateCreds = Read-Host -Prompt "Would you kindly update your credentials?[y/n]"
-if ( $updateCreds -match "[yY]" ) { 
-    Save-Cred
-}
-
-# Use the saved credentials when needed
-$aCreds = (Import-Clixml -Path "${env:\userprofile}\Hash.Cred").Admin
-# $uCreds = (Import-Clixml -Path "${env:\userprofile}\Hash.Cred").User
-
-# Invoke-Command -ComputerName KBNDBMGT02 -Credential $aCreds -ScriptBlock {$env:username}
-# Invoke-Command -ComputerName KBNDBMGT02 -Credential $Hash.RemoteUser -ScriptBlock {whoami}
-# Invoke-Command -ComputerName KBNDBMGT02 -Credential $uCreds -ScriptBlock {$env:username}
-
 
 # environment details
 (Get-Host).Version
-# "`nEnvironemnt variables - Paths`n"
-# $env:Path -split ";" | Sort-Object -Descending
+$env:Path -split ";" | Sort-Object -Descending

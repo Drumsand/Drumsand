@@ -22,7 +22,8 @@ $ProfileConfig = @{
                                     # $false => use LocalAppData OMP themes folder (machine-specific)
     AutoUpdateOhMyPosh    = $false  # Optional auto-update behavior (OFF by default; safer for profiles)
     VerboseBootstrap      = $false  # Controls header chatter (Write-Verbose) for troubleshooting
-    EnsureProfileDir      = $true   # Optional: allow creating the profile directory if missing      
+    EnsureProfileDir      = $true   # Optional: allow creating the profile directory if missing
+}
 
 # Splat cofig 4 module Verbose/ErrorAction/...
 $DefaultParamConfig = @{

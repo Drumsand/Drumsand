@@ -17,18 +17,12 @@
 
 # Splat config 4 OMP
 $ProfileConfig = @{
-        # If a file "<ThemeName>.omp.json" exists at the chosen path, it will be used.
     PoshThemeName         = 'froczh'    
-        # $true  => use your PowerShell profile folder (portable, recommended)
-        # $false => use LocalAppData OMP themes folder (machine-specific)
-    PreferUserProfilePath = $true
-        # Optional auto-update behavior (OFF by default; safer for profiles)
-    AutoUpdateOhMyPosh    = $false
-        # Controls header chatter (Write-Verbose) for troubleshooting
-    VerboseBootstrap      = $false
-        # Optional: allow creating the profile directory if missing
-    EnsureProfileDir      = $true
-}
+    PreferUserProfilePath = $true   # $true  => use your PowerShell profile folder (portable, recommended)
+                                    # $false => use LocalAppData OMP themes folder (machine-specific)
+    AutoUpdateOhMyPosh    = $false  # Optional auto-update behavior (OFF by default; safer for profiles)
+    VerboseBootstrap      = $false  # Controls header chatter (Write-Verbose) for troubleshooting
+    EnsureProfileDir      = $true   # Optional: allow creating the profile directory if missing      
 
 # Splat cofig 4 module Verbose/ErrorAction/...
 $DefaultParamConfig = @{
@@ -39,6 +33,25 @@ $DefaultParamConfig = @{
         @{ Pattern = 'Get-VM*'; Params = @{ Verbose = $true } }
         # @{ Pattern = 'Invoke-Sqlcmd*'; Params = @{ ErrorAction = 'Stop' } }
     )
+}
+
+# Splat config 4 Paths and Aliases
+$ProfileConfig = @{
+    # Add these folders to PATH (session-scoped; put it in profile = "every session")
+    Paths = @(
+        'C:\Program Files\Notepad++'
+        # 'C:\Tools\bin'
+        # 'C:\Program Files\Git\cmd'
+    )
+
+    # Create functions that call executables and forward args safely
+    Commands = @{
+        npp = @{
+            Exe = 'C:\Program Files\Notepad++\notepad++.exe'
+        }
+        # code = @{ Exe = 'C:\Users\YOU\AppData\Local\Programs\Microsoft VS Code\Code.exe' }
+        # az   = @{ Exe = 'C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd' }
+    }
 }
 
 # # Splat config 4 function Secret Config (pass vault)
@@ -178,6 +191,46 @@ function Initialize-OhMyPosh {
     }
 }
 
+# =========================
+# Helpers (generic + reusable)
+# =========================
+function Add-PathEntry {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+
+    $sep = [IO.Path]::PathSeparator  # ';' on Windows
+    $current = ($env:PATH -split [Regex]::Escape($sep)) | Where-Object { $_ -ne '' }
+
+    # Avoid duplicates (case-insensitive on Windows)
+    if ($current -notcontains $Path) {
+        $env:PATH = ($current + $Path) -join $sep
+    }
+}
+
+function New-ExeCommand {
+    param(
+        [Parameter(Mandatory)]
+        [string] $Name,
+
+        [Parameter(Mandatory)]
+        [string] $Exe
+    )
+
+    if (-not (Test-Path -LiteralPath $Exe)) { return }
+
+    # Create a function in the global scope (so it’s available everywhere)
+    $fn = @"
+param([Parameter(ValueFromRemainingArguments=`$true)][object[]]`$Args)
+& "$Exe" @Args
+"@
+    Set-Item -Path "Function:\global:$Name" -Value ([ScriptBlock]::Create($fn))
+}
+
+
 # # =========================================================
 # # Ensure SecretManagement Module is installed
 # #   designed for splatting: Initialize-OhMyPosh @ProfileConfig
@@ -249,6 +302,16 @@ function Set-ProfileDefaultParameters {
 }
 
 Set-ProfileDefaultParameters -Config $DefaultParamConfig
+
+# Call Path and Aliases
+foreach ($p in $ProfileConfig.Paths) {
+    Add-PathEntry -Path $p
+}
+
+foreach ($name in $ProfileConfig.Commands.Keys) {
+    $cmd = $ProfileConfig.Commands[$name]
+    New-ExeCommand -Name $name -Exe $cmd.Exe
+}
 
 # # Call Credentials (secretManagement)
 # function Read-YesNoOrSkip {

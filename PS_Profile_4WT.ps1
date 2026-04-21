@@ -13,10 +13,10 @@
 
     #  Usage:
     #  Put this header at the top of your profile (.ps1)
-    #  Call Initialize-OhMyPosh @ProfileConfig early (before other functions/modules)
+    #  Call Initialize-OhMyPosh @OhMyPoshConfig early (before other functions/modules)
 
 # Splat config 4 OMP
-$ProfileConfig = @{
+$OhMyPoshConfig = @{
     PoshThemeName         = 'froczh'    
     PreferUserProfilePath = $true   # $true  => use your PowerShell profile folder (portable, recommended)
                                     # $false => use LocalAppData OMP themes folder (machine-specific)
@@ -37,7 +37,7 @@ $DefaultParamConfig = @{
 }
 
 # Splat config 4 Paths and Aliases
-$ProfileConfig = @{
+$PathAliasConfig  = @{
     # Add these folders to PATH (session-scoped; put it in profile = "every session")
     Paths = @(
         'C:\Program Files\Notepad++'
@@ -85,7 +85,7 @@ function Write-BootstrapVerbose {
 
 # =========================================================
 # Initialize-OhMyPosh
-# - designed for splatting: Initialize-OhMyPosh @ProfileConfig
+# - designed for splatting: Initialize-OhMyPosh @OhMyPoshConfig
 # =========================================================
 function Initialize-OhMyPosh {
     [CmdletBinding()]
@@ -234,7 +234,7 @@ param([Parameter(ValueFromRemainingArguments=`$true)][object[]]`$Args)
 
 # # =========================================================
 # # Ensure SecretManagement Module is installed
-# #   designed for splatting: Initialize-OhMyPosh @ProfileConfig
+# #   designed for splatting: Initialize-OhMyPosh @OhMyPoshConfig
 # # =========================================================
 # function Ensure-SecretModules {
 #     [CmdletBinding()]
@@ -283,8 +283,8 @@ param([Parameter(ValueFromRemainingArguments=`$true)][object[]]`$Args)
 # Call bootstrap early
 # =============================
 
-# Call OMP ($ProfileConfig)
-Initialize-OhMyPosh @ProfileConfig
+# Call OMP ($OhMyPoshConfig)
+Initialize-OhMyPosh @OhMyPoshConfig
 
 # Call Verbose ($DefaultParamConfig)
 function Set-ProfileDefaultParameters {
@@ -305,12 +305,12 @@ function Set-ProfileDefaultParameters {
 Set-ProfileDefaultParameters -Config $DefaultParamConfig
 
 # Call Path and Aliases
-foreach ($p in $ProfileConfig.Paths) {
+foreach ($p in $PathAliasConfig.Paths) {
     Add-PathEntry -Path $p
 }
 
-foreach ($name in $ProfileConfig.Commands.Keys) {
-    $cmd = $ProfileConfig.Commands[$name]
+foreach ($name in $PathAliasConfig.Commands.Keys) {
+    $cmd = $PathAliasConfig.Commands[$name]
     New-ExeCommand -Name $name -Exe $cmd.Exe
 }
 
